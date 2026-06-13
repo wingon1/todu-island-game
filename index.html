@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#A8D8EA" />
+    <title>Cozy Island Tycoon</title>
+    <style>
+      :root {
+        --grass: #7ec850;
+        --sand: #f5d06b;
+        --water: #a8d8ea;
+        --wood-dark: #8b5e3c;
+        --wood-light: #c49a6c;
+        --panel-bg: rgba(255, 248, 236, 0.92);
+        --accent: #ff8c42;
+        --coin: #ffd700;
+        --ink: #5b4636;
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(180deg, #bfe9f5 0%, #a8d8ea 55%, #cde5b8 100%);
+        font-family: 'Baloo 2', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+        color: var(--ink);
+        touch-action: manipulation;
+        position: fixed;
+        inset: 0;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* Top 65%: 3D viewport */
+      #canvas-wrap {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 79%;
+      }
+      #game-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Floating labels layer sits over the canvas */
+      #label-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 79%;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      /* Top HUD: coins + inventory as item icons over the scene, transparent. */
+      #top-hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px 10px;
+        flex-wrap: wrap;
+        padding: calc(6px + env(safe-area-inset-top)) 10px 5px;
+        pointer-events: none;
+        z-index: 12;
+      }
+      .hud-item {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-weight: 800;
+        font-size: 14px;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(50, 35, 18, 0.6), 0 0 2px rgba(50, 35, 18, 0.5);
+        transition: transform 0.12s ease;
+      }
+      .hud-item.bump {
+        transform: scale(1.22);
+      }
+      .hud-icon {
+        width: 20px;
+        height: 20px;
+        display: block;
+        filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+      }
+      .hud-coin {
+        font-size: 16px;
+      }
+      .hud-coin .hud-icon {
+        width: 23px;
+        height: 23px;
+      }
+      .coin-label {
+        position: absolute;
+        font-weight: 800;
+        font-size: 20px;
+        color: var(--coin);
+        text-shadow: 0 2px 0 rgba(120, 80, 20, 0.55);
+        transform: translate(-50%, -50%);
+        white-space: nowrap;
+        will-change: transform, opacity;
+      }
+
+      /* Bottom UI: clean pastel command bar */
+      #ui-panel {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 21%;
+        background: rgba(255, 248, 236, 0.94);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(255, 255, 255, 0.78);
+        box-shadow: 0 -4px 18px rgba(90, 120, 120, 0.12);
+        border-radius: 18px 18px 0 0;
+        display: flex;
+        flex-direction: column;
+        padding: 10px 12px calc(9px + env(safe-area-inset-bottom)) 12px;
+        gap: 7px;
+        overflow: hidden;
+      }
+      #ui-panel::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #a8d8ea, #f5d06b, #7ec850, #ff8c42);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      #ui-panel::after {
+        content: none;
+      }
+
+      .panel-top {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        position: relative;
+        z-index: 1;
+        min-height: 24px;
+        margin-bottom: -2px;
+      }
+      #test-money {
+        font-family: inherit;
+        border: 1px solid rgba(91, 70, 54, 0.08);
+        cursor: pointer;
+        background: rgba(168, 216, 234, 0.42);
+        color: #567887;
+        font-weight: 800;
+        font-size: 11px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        box-shadow: none;
+      }
+      #test-money:active {
+        transform: scale(0.95);
+      }
+
+      .coin-counter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 26px;
+        font-weight: 800;
+        color: var(--ink);
+      }
+      .coin-badge {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff3a8, var(--coin) 60%, #d9ab00 100%);
+        border: 2px solid #c98f00;
+        box-shadow: 0 2px 4px rgba(120, 80, 20, 0.35);
+        display: grid;
+        place-items: center;
+        font-size: 15px;
+        color: #a06f00;
+      }
+      .coin-value {
+        min-width: 40px;
+      }
+
+      .stage-pill {
+        position: absolute;
+        top: calc(6px + env(safe-area-inset-top));
+        left: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 64px;
+        min-height: 22px;
+        font-size: 10.5px;
+        font-weight: 900;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(255, 248, 236, 0.68);
+        color: rgba(91, 70, 54, 0.76);
+        border: 1px solid rgba(91, 70, 54, 0.07);
+        box-shadow: none;
+        text-align: center;
+        line-height: 1.02;
+        text-shadow: none;
+      }
+
+      .inventory-grid {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .inv-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.65);
+        border: 2px solid rgba(139, 94, 60, 0.18);
+        border-radius: 14px;
+        padding: 6px 10px;
+        font-weight: 700;
+        font-size: 15px;
+        min-width: 58px;
+        justify-content: center;
+        transition: transform 0.12s ease;
+      }
+      .inv-chip.bump {
+        transform: scale(1.18);
+      }
+      .inv-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        flex: 0 0 auto;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 0;
+        position: relative;
+        z-index: 1;
+        min-height: 48px;
+      }
+
+      button.game-btn {
+        font-family: inherit;
+        border: none;
+        cursor: pointer;
+        color: #fff;
+        font-weight: 800;
+        border-radius: 12px;
+        padding: 9px 9px;
+        font-size: 14px;
+        flex: 1;
+        line-height: 1.15;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        box-shadow: none;
+        transition: transform 0.1s ease, filter 0.1s ease, opacity 0.1s ease;
+      }
+      button.game-btn:active {
+        transform: scale(0.96);
+      }
+
+      #upgrade-btn {
+        background: #ff8c42;
+      }
+      #upgrade-btn.affordable {
+        animation: pulse 1.1s ease-in-out infinite;
+      }
+      #upgrade-btn:disabled {
+        background: #c9bcab;
+        color: rgba(255, 255, 255, 0.84);
+        cursor: default;
+        animation: none;
+        opacity: 0.76;
+      }
+      #upgrade-btn .cost {
+        display: block;
+        font-size: 10.5px;
+        font-weight: 700;
+        opacity: 0.95;
+      }
+
+      #stock-btn {
+        background: #5fbf93;
+        flex: 0 0 34%;
+      }
+      #stock-btn:disabled {
+        background: #c9bcab;
+        opacity: 0.65;
+        cursor: default;
+      }
+
+      /* Alba hire row */
+      .hire-row {
+        display: flex;
+        gap: 7px;
+        position: relative;
+        z-index: 1;
+        min-height: 42px;
+      }
+      .hire-btn {
+        flex: 1;
+        font-family: inherit;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.58);
+        border: 1px solid rgba(91, 70, 54, 0.1);
+        border-radius: 12px;
+        padding: 6px 4px;
+        line-height: 1.12;
+        color: #5b4636;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        box-shadow: none;
+        transition: transform 0.1s ease, filter 0.1s ease;
+      }
+      .hire-btn:active {
+        transform: scale(0.96);
+      }
+      .hire-btn .hl {
+        font-weight: 800;
+        font-size: 11.5px;
+      }
+      .hire-btn .hs {
+        font-size: 9px;
+        font-weight: 700;
+        opacity: 0.76;
+        white-space: nowrap;
+      }
+      .hire-btn.afford {
+        background: rgba(255, 140, 66, 0.13);
+        border-color: rgba(255, 140, 66, 0.45);
+        filter: none;
+      }
+      .hire-btn.afford .hs {
+        color: var(--accent);
+        opacity: 1;
+      }
+      .hire-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.04);
+        }
+      }
+
+      /* Victory overlay */
+      #victory {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 30px;
+        text-align: center;
+        background: radial-gradient(circle at 50% 30%, rgba(255, 250, 235, 0.96), rgba(255, 230, 190, 0.96));
+        backdrop-filter: blur(6px);
+        z-index: 30;
+      }
+      #victory.show {
+        display: flex;
+        animation: fadein 0.5s ease;
+      }
+      @keyframes fadein {
+        from {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      #victory h1 {
+        margin: 0;
+        font-size: 30px;
+        color: var(--accent);
+        text-shadow: 0 3px 0 rgba(201, 106, 38, 0.35);
+        line-height: 1.25;
+      }
+      .victory-sub {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ink);
+        opacity: 0.8;
+        margin-top: -6px;
+      }
+      .stat-card {
+        background: rgba(255, 255, 255, 0.78);
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        border-radius: 20px;
+        padding: 18px 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 8px 22px rgba(120, 90, 40, 0.18);
+        min-width: 240px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        font-size: 17px;
+      }
+      .stat-row .k {
+        font-weight: 700;
+        opacity: 0.7;
+      }
+      .stat-row .v {
+        font-weight: 800;
+        color: var(--accent);
+      }
+      #replay-btn {
+        margin-top: 6px;
+        background: var(--accent);
+        box-shadow: 0 5px 0 #c96a26;
+        color: #fff;
+        border: none;
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 20px;
+        padding: 16px 40px;
+        border-radius: 18px;
+        cursor: pointer;
+      }
+      #replay-btn:active {
+        transform: scale(0.96);
+      }
+
+      /* Start gate (first tap to enable audio) */
+      #start-gate {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: radial-gradient(circle at 50% 35%, rgba(255, 250, 235, 0.95), rgba(168, 216, 234, 0.95));
+        text-align: center;
+        padding: 30px;
+      }
+      #start-gate h1 {
+        font-size: 34px;
+        margin: 0;
+        color: var(--accent);
+        text-shadow: 0 3px 0 rgba(201, 106, 38, 0.3);
+      }
+      #start-gate p {
+        font-size: 16px;
+        max-width: 280px;
+        opacity: 0.8;
+        font-weight: 600;
+      }
+      #start-btn {
+        background: var(--accent);
+        box-shadow: 0 5px 0 #c96a26;
+        color: #fff;
+        border: none;
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 22px;
+        padding: 16px 46px;
+        border-radius: 18px;
+        cursor: pointer;
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      #start-btn:active {
+        transform: scale(0.95);
+      }
+      .hint {
+        font-size: 13px;
+        opacity: 0.65;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="canvas-wrap">
+        <canvas id="game-canvas"></canvas>
+      </div>
+      <div id="label-layer"></div>
+
+      <div id="top-hud">
+        <div class="stage-pill" id="stage-pill">Wooden<br />Stall</div>
+        <div class="hud-item hud-coin">
+          <span class="hud-icon" id="coin-icon"></span>
+          <span id="coin-value">0</span>
+        </div>
+        <div class="inventory-grid" id="inventory-grid"></div>
+      </div>
+
+      <div id="ui-panel">
+        <div class="panel-top">
+          <button id="test-money" title="테스트: 다음 단계 비용만큼 코인 충전">TEST +$</button>
+        </div>
+
+        <div class="hire-row">
+          <button class="hire-btn" id="hire-harvester">
+            <span class="hl">수확 알바</span><span class="hs" id="cost-harvester">Lv0</span>
+          </button>
+          <button class="hire-btn" id="hire-stocker">
+            <span class="hl">진열 알바</span><span class="hs" id="cost-stocker">Lv0</span>
+          </button>
+        </div>
+
+        <div class="button-row">
+          <button class="game-btn" id="stock-btn">Stock Shelf</button>
+          <button class="game-btn" id="upgrade-btn">
+            UPGRADE STORE
+            <span class="cost" id="upgrade-cost">50 coins</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="victory">
+        <h1 id="victory-title">Phase 1 Goal Achieved!<br />(1차 목표 달성!)</h1>
+        <div class="victory-sub">Your island store is thriving 🌴</div>
+        <div class="stat-card">
+          <div class="stat-row"><span class="k">Total Coins Earned</span><span class="v" id="v-coins">0</span></div>
+          <div class="stat-row"><span class="k">Customers Served</span><span class="v" id="v-customers">0</span></div>
+          <div class="stat-row"><span class="k">Time Elapsed</span><span class="v" id="v-time">00:00</span></div>
+        </div>
+        <button id="replay-btn">Play Again</button>
+      </div>
+
+      <div id="start-gate">
+        <h1>🏝️ Cozy Island Tycoon</h1>
+        <p>나무에서 수액을 채취하고, 진열대에 상품을 채우고, 귀여운 섬 손님들에게 음식을 대접하여 가게를 키워나가세요!</p>
+        <button id="start-btn">Tap to Start</button>
+        <div class="hint">세로 모드에서 플레이하는 것이 가장 좋습니다. 소리를 켜고 플레이하세요.</div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
