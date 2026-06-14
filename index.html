@@ -540,6 +540,13 @@
       .shop-card.locked {
         opacity: 0.62;
       }
+      .shop-card.concealed {
+        opacity: 1;
+        background:
+          repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.42) 0 7px, rgba(245, 208, 107, 0.2) 7px 14px),
+          rgba(255, 248, 236, 0.7);
+        border-color: rgba(91, 70, 54, 0.08);
+      }
       .shop-card-icon {
         width: 42px;
         height: 42px;
@@ -551,6 +558,15 @@
       .shop-card-icon svg {
         width: 32px;
         height: 32px;
+      }
+      .shop-card.concealed .shop-card-icon {
+        background: rgba(91, 70, 54, 0.07);
+      }
+      .shop-mystery {
+        color: rgba(91, 70, 54, 0.35);
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1;
       }
       .shop-card-title {
         font-size: 14px;

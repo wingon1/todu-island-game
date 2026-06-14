@@ -2,7 +2,7 @@
 // lighting, the game loop, resize handling, tap raycasting, and wires all
 // systems together.
 import * as THREE from 'three';
-import { gameState, FINAL_STAGE, STAGES } from './GameState.js';
+import { gameState, STAGES } from './GameState.js';
 import { audio } from './Audio.js';
 import { Particles } from './Particles.js';
 import { Island } from './Island.js';
@@ -225,7 +225,7 @@ const facilities = new FacilityManager(scene, island, audio, {
 });
 
 let paused = true; // until Start tapped
-let gameOver = gameState.stage >= FINAL_STAGE && gameState.finalSaleDone;
+let gameOver = false;
 
 const ui = new UI({
   audio,
@@ -251,11 +251,6 @@ function restoreWorldFromState() {
 }
 
 restoreWorldFromState();
-if (gameOver) {
-  paused = true;
-  queueMicrotask(() => ui.showVictory());
-}
-
 // ---------------------------------------------------------------------------
 // Tap / click harvesting via raycaster.
 // ---------------------------------------------------------------------------
@@ -611,15 +606,8 @@ function animate() {
     workers.update(dt, elapsed);
     facilities.update(dt, elapsed);
 
-    // Victory: first sale of the final resource at the final stage.
-    if (gameState.stage >= FINAL_STAGE && gameState.finalSaleDone) {
-      gameOver = true;
-      paused = true;
-      ui.showVictory();
-      scheduleSave();
-    }
   } else {
-    // Keep water gently animating even on the start/victory screens.
+    // Keep water gently animating even on the start screen.
     island.update(0, elapsed);
     store.update(0, elapsed);
   }

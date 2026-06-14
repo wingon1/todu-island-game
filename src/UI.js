@@ -464,9 +464,9 @@ export class UI {
     return `${Math.max(0, cost - gameState.coins)} 부족`;
   }
 
-  _card({ icon = '', title, desc, button, disabled = false, action = '', attrs = '', affordable = false }) {
+  _card({ icon = '', title, desc, button, disabled = false, action = '', attrs = '', affordable = false, concealed = false }) {
     return `
-      <div class="shop-card ${disabled ? 'locked' : ''}">
+      <div class="shop-card ${disabled ? 'locked' : ''} ${concealed ? 'concealed' : ''}">
         <div class="shop-card-icon">${icon}</div>
         <div>
           <div class="shop-card-title">${title}</div>
@@ -479,6 +479,10 @@ export class UI {
 
   _storeIcon() {
     return `<span class="shop-icon" style="transform:scale(.92);"></span>`;
+  }
+
+  _mysteryIcon() {
+    return `<span class="shop-mystery">?</span>`;
   }
 
   _storeCards() {
@@ -524,13 +528,14 @@ export class UI {
     const stageLocked = gameState.stage < up.stage;
     const can = gameState.canBuyShelfDisplayUpgrade();
     return this._card({
-      icon: up.id === 'basket' ? itemIconSVG('flower') : itemIconSVG('fish'),
-      title: up.kr,
-      desc: stageLocked ? `스테이지 ${up.stage}에서 구매할 수 있어요` : up.desc,
+      icon: stageLocked ? this._mysteryIcon() : up.id === 'basket' ? itemIconSVG('flower') : itemIconSVG('fish'),
+      title: stageLocked ? '???' : up.kr,
+      desc: stageLocked ? `스테이지 ${up.stage}에서 공개돼요` : up.desc,
       button: stageLocked ? '잠김' : can ? `${up.cost}` : `${up.cost - gameState.coins} 부족`,
       action: 'shelf-display',
       affordable: can,
       disabled: stageLocked || !can,
+      concealed: stageLocked,
     });
   }
 
@@ -573,17 +578,18 @@ export class UI {
       const max = cost === null;
       const verb = lvl === 0 ? '고용' : '레벨업';
       const desc = locked
-        ? '스테이지 5에서 생산터가 열려요'
+        ? '스테이지 5에서 공개돼요'
         : `Lv${lvl} · ${rate.toFixed(1)}/초 생산`;
       return this._card({
-        icon: itemIconSVG(f.item),
-        title: f.kr,
+        icon: locked ? this._mysteryIcon() : itemIconSVG(f.item),
+        title: locked ? '???' : f.kr,
         desc,
         button: locked ? '잠김' : max ? 'MAX' : `${verb} ${this._costText(cost, can)}`,
         action: 'hire-facility',
         attrs: `data-id="${id}"`,
         affordable: can,
         disabled: locked || max || !can,
+        concealed: locked,
       });
     }).join('');
   }

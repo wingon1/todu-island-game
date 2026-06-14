@@ -27,15 +27,13 @@ export const ITEM_VALUE = Object.fromEntries(ITEM_TYPES.map((t) => [t, ITEMS[t].
 // stage. To add Stage 6: append an entry and register its store/map builders.
 export const STAGES = {
   1: { name: 'Wooden\nStall', shelfSlots: 2, items: ['acorn'], customers: ['squirrel'], upgradeCost: 50, unlocks: [], viewW: 9.5, viewShift: 0 },
-  2: { name: 'Fabric\nTent', shelfSlots: 4, items: ['acorn', 'banana'], customers: ['squirrel', 'monkey'], upgradeCost: 200, unlocks: ['palms'], viewW: 9.5, viewShift: 0 },
-  3: { name: 'Thatch\nStore', shelfSlots: 6, items: ['acorn', 'banana', 'fish', 'shell'], customers: ['squirrel', 'monkey', 'rabbit', 'cat'], upgradeCost: 600, unlocks: ['shore'], viewW: 9.5, viewShift: 0 },
-  4: { name: 'Garden\nStall', shelfSlots: 8, items: ['acorn', 'banana', 'fish', 'shell', 'flower'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear'], upgradeCost: 1500, unlocks: ['island2', 'bridge', 'flowerbeds'], viewW: 14.0, viewShift: 7.0 },
+  2: { name: 'Fabric\nTent', shelfSlots: 4, items: ['acorn', 'banana'], customers: ['squirrel', 'monkey'], upgradeCost: 300, unlocks: ['palms'], viewW: 9.5, viewShift: 0 },
+  3: { name: 'Thatch\nStore', shelfSlots: 6, items: ['acorn', 'banana', 'fish', 'shell'], customers: ['squirrel', 'monkey', 'rabbit', 'cat'], upgradeCost: 1000, unlocks: ['shore'], viewW: 9.5, viewShift: 0 },
+  4: { name: 'Garden\nStall', shelfSlots: 8, items: ['acorn', 'banana', 'fish', 'shell', 'flower'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear'], upgradeCost: 3000, unlocks: ['island2', 'bridge', 'flowerbeds'], viewW: 14.0, viewShift: 7.0 },
   5: { name: 'Garden\nCafé', shelfSlots: 10, items: ['acorn', 'banana', 'fish', 'shell', 'flower', 'honey'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear', 'fox'], upgradeCost: null, unlocks: ['fountain', 'beehives', 'stonepath', 'upperIsland', 'lowerIsland'], viewW: 15.0, viewShift: 7.5 },
 };
 // Highest defined stage = final tier (auto-updates when stages are added).
 export const FINAL_STAGE = Math.max(...Object.keys(STAGES).map(Number));
-// The resource whose first sale at the final stage wins the game.
-export const FINAL_ITEM = 'honey';
 
 // ====== TEST MODE ======
 // Flip this ONE flag: true = ×5 coins + "TEST +$" button shown;
@@ -72,12 +70,12 @@ export const BASE_CUSTOMERS = 3; // stage 1 concurrent customers
 // Hire a worker to auto-produce one resource over time; level raises the rate.
 // rate (items/sec) = base + (level-1)*perLevel. Balance values are tunable.
 export const FACILITIES = {
-  acornFarm: { item: 'acorn', kr: '도토리 농장', base: 1.5, perLevel: 1.2, baseCost: 800, costMul: 1.7, maxLevel: 8 },
-  bananaFarm: { item: 'banana', kr: '바나나 농장', base: 1.2, perLevel: 1.0, baseCost: 1200, costMul: 1.7, maxLevel: 8 },
-  fishFarm: { item: 'fish', kr: '물고기 양식장', base: 0.9, perLevel: 0.8, baseCost: 2000, costMul: 1.7, maxLevel: 8 },
-  clamFarm: { item: 'shell', kr: '조개 수확장', base: 1.0, perLevel: 0.9, baseCost: 1800, costMul: 1.7, maxLevel: 8 },
-  flowerGarden: { item: 'flower', kr: '꽃 정원', base: 0.75, perLevel: 0.65, baseCost: 2600, costMul: 1.7, maxLevel: 8 },
-  honeyApiary: { item: 'honey', kr: '꿀 양봉장', base: 0.55, perLevel: 0.5, baseCost: 3600, costMul: 1.7, maxLevel: 8 },
+  acornFarm: { item: 'acorn', kr: '도토리 농장', base: 0.45, perLevel: 0.25, baseCost: 800, costMul: 1.7, maxLevel: 8 },
+  bananaFarm: { item: 'banana', kr: '바나나 농장', base: 0.35, perLevel: 0.22, baseCost: 1200, costMul: 1.7, maxLevel: 8 },
+  fishFarm: { item: 'fish', kr: '물고기 양식장', base: 0.28, perLevel: 0.18, baseCost: 2000, costMul: 1.7, maxLevel: 8 },
+  clamFarm: { item: 'shell', kr: '조개 수확장', base: 0.3, perLevel: 0.18, baseCost: 1800, costMul: 1.7, maxLevel: 8 },
+  flowerGarden: { item: 'flower', kr: '꽃 정원', base: 0.22, perLevel: 0.15, baseCost: 2600, costMul: 1.7, maxLevel: 8 },
+  honeyApiary: { item: 'honey', kr: '꿀 양봉장', base: 0.14, perLevel: 0.11, baseCost: 3600, costMul: 1.7, maxLevel: 8 },
 };
 export const FACILITY_IDS = Object.keys(FACILITIES);
 
@@ -165,9 +163,6 @@ export class GameState {
     this.coins += value;
     this.lifetimeCoins += value;
     this.customersServed += 1;
-    if (this.stage >= FINAL_STAGE && type === FINAL_ITEM && !this.finalSaleDone) {
-      this.finalSaleDone = true;
-    }
     return value;
   }
 
@@ -329,7 +324,7 @@ export class GameState {
         lifetimeCoins: this.lifetimeCoins,
         customersServed: this.customersServed,
         elapsed: this.elapsedSeconds(),
-        finalSaleDone: this.finalSaleDone,
+        finalSaleDone: false,
         alba: this.alba,
         facilities: this.facilities,
         shelfDisplayLevel: this.shelfDisplayLevel,
@@ -354,7 +349,7 @@ export class GameState {
         : [];
       this.lifetimeCoins = d.lifetimeCoins || 0;
       this.customersServed = d.customersServed || 0;
-      this.finalSaleDone = !!d.finalSaleDone;
+      this.finalSaleDone = false;
       this.alba = Object.assign(Object.fromEntries(ALBA_TYPES.map((t) => [t, 0])), d.alba || {});
       this.facilities = Object.assign(Object.fromEntries(FACILITY_IDS.map((id) => [id, 0])), d.facilities || {});
       this.shelfDisplayLevel = Math.min(2, Math.max(0, d.shelfDisplayLevel || 0));
