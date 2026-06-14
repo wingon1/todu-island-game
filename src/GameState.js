@@ -30,7 +30,7 @@ export const STAGES = {
   2: { name: 'Fabric\nTent', shelfSlots: 4, items: ['acorn', 'banana'], customers: ['squirrel', 'monkey'], upgradeCost: 200, unlocks: ['palms'], viewW: 9.5, viewShift: 0 },
   3: { name: 'Thatch\nStore', shelfSlots: 6, items: ['acorn', 'banana', 'fish', 'shell'], customers: ['squirrel', 'monkey', 'rabbit', 'cat'], upgradeCost: 600, unlocks: ['shore'], viewW: 9.5, viewShift: 0 },
   4: { name: 'Garden\nStall', shelfSlots: 8, items: ['acorn', 'banana', 'fish', 'shell', 'flower'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear'], upgradeCost: 1500, unlocks: ['island2', 'bridge', 'flowerbeds'], viewW: 14.0, viewShift: 7.0 },
-  5: { name: 'Garden\nCafé', shelfSlots: 10, items: ['acorn', 'banana', 'fish', 'shell', 'flower', 'honey'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear', 'fox'], upgradeCost: null, unlocks: ['fountain', 'beehives', 'stonepath'], viewW: 15.0, viewShift: 7.5 },
+  5: { name: 'Garden\nCafé', shelfSlots: 10, items: ['acorn', 'banana', 'fish', 'shell', 'flower', 'honey'], customers: ['squirrel', 'monkey', 'rabbit', 'cat', 'bear', 'fox'], upgradeCost: null, unlocks: ['fountain', 'beehives', 'stonepath', 'upperIsland', 'lowerIsland'], viewW: 15.0, viewShift: 7.5 },
 };
 // Highest defined stage = final tier (auto-updates when stages are added).
 export const FINAL_STAGE = Math.max(...Object.keys(STAGES).map(Number));
@@ -40,7 +40,7 @@ export const FINAL_ITEM = 'honey';
 // ====== TEST MODE ======
 // Flip this ONE flag: true = ×5 coins + "TEST +$" button shown;
 // false = normal balance (×1) + the test button is hidden. Ship with false.
-export const TEST_MODE = false;
+export const TEST_MODE = true;
 export const COIN_MULTIPLIER = TEST_MODE ? 5 : 1;
 const SAVE_KEY = 'cozy-island-tycoon-save-v1';
 
@@ -68,6 +68,17 @@ export const ALBA_INFO = {
 export const MAX_CUSTOMERS = 18;
 export const BASE_CUSTOMERS = 3; // stage 1 concurrent customers
 
+// --- Production facilities (Stage 5 upper/lower islands) --------------------
+// Hire a worker to auto-produce one resource over time; level raises the rate.
+// rate (items/sec) = base + (level-1)*perLevel. Balance values are tunable.
+export const FACILITIES = {
+  acornFarm: { item: 'acorn', kr: '도토리 농장', base: 1.5, perLevel: 1.2, baseCost: 800, costMul: 1.7, maxLevel: 8 },
+  bananaFarm: { item: 'banana', kr: '바나나 농장', base: 1.2, perLevel: 1.0, baseCost: 1200, costMul: 1.7, maxLevel: 8 },
+  fishFarm: { item: 'fish', kr: '물고기 양식장', base: 0.9, perLevel: 0.8, baseCost: 2000, costMul: 1.7, maxLevel: 8 },
+  clamFarm: { item: 'shell', kr: '조개 수확장', base: 1.0, perLevel: 0.9, baseCost: 1800, costMul: 1.7, maxLevel: 8 },
+};
+export const FACILITY_IDS = Object.keys(FACILITIES);
+
 export class GameState {
   constructor() {
     this.reset();
@@ -87,6 +98,7 @@ export class GameState {
     this.finalSaleDone = false;
 
     this.alba = Object.fromEntries(ALBA_TYPES.map((t) => [t, 0]));
+    this.facilities = Object.fromEntries(FACILITY_IDS.map((id) => [id, 0]));
   }
 
   get config() {
@@ -235,6 +247,33 @@ export class GameState {
   customerSpawnInterval() {
     const base = Math.max(1.6, 7 / (1 + (this.stage - 1) * 0.4));
     return base * this.clerkSpawnFactor();
+  }
+
+  // --- Production facilities -------------------------------------------------
+  facilityLevel(id) {
+    return this.facilities[id] || 0;
+  }
+  facilityCost(id) {
+    const f = FACILITIES[id];
+    const lv = this.facilityLevel(id);
+    if (lv >= f.maxLevel) return null;
+    return Math.round(f.baseCost * Math.pow(f.costMul, lv));
+  }
+  canHireFacility(id) {
+    const c = this.facilityCost(id);
+    return c !== null && this.coins >= c;
+  }
+  hireFacility(id) {
+    const c = this.facilityCost(id);
+    if (c === null || this.coins < c) return false;
+    this.coins -= c;
+    this.facilities[id] += 1;
+    return true;
+  }
+  facilityRate(id) {
+    const f = FACILITIES[id];
+    const lv = this.facilityLevel(id);
+    return lv <= 0 ? 0 : f.base + (lv - 1) * f.perLevel;
   }
 
   // --- Save / load (localStorage) ------------------------------------------

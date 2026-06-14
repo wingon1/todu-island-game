@@ -54,7 +54,11 @@ export class Island {
       fountain: () => this._buildFountain(),
       beehives: () => this._buildBeehives(),
       stonepath: () => this._buildStonePath(),
+      upperIsland: () => this._buildUpperIsland(),
+      lowerIsland: () => this._buildLowerIsland(),
     };
+    // Facility stations (world positions + hit meshes), built at Stage 5.
+    this.facilityStations = {}; // id -> { pos: Vector3, hit: Mesh }
   }
 
   // Enable every feature a stage unlocks (idempotent).
@@ -430,7 +434,7 @@ export class Island {
   _buildIsland2() {
     if (this.island2) return;
     const g = new THREE.Group();
-    g.position.set(17.0, 0, 0); // farther out so a real gap + bridge is visible
+    g.position.set(15.0, 0, 0); // closer to the main island
     this.island2 = g;
     this.group.add(g);
     const csz = 0.92;
@@ -672,6 +676,128 @@ export class Island {
     });
   }
 
+  // --- Stage 5: upper & lower production islands ------------------------------
+  // Generic landmass (sand + grass) into a group.
+  _landmass(group, sandR, grassR, csz, warp) {
+    const sandGeo = new THREE.CylinderGeometry(sandR - 0.2, sandR, 1.0, 56);
+    this._warpCoast(sandGeo, warp);
+    const sand = new THREE.Mesh(sandGeo, toonMat(COLORS.sand, { flatShading: true }));
+    sand.scale.set(1, 1, csz);
+    sand.receiveShadow = true;
+    sand.castShadow = true;
+    group.add(sand);
+    const grassGeo = new THREE.CylinderGeometry(grassR - 0.2, grassR, 1.05, 56);
+    this._warpCoast(grassGeo, warp);
+    const grass = new THREE.Mesh(grassGeo, toonMat(COLORS.grass, { flatShading: true }));
+    grass.scale.set(1, 1, csz);
+    grass.position.y = 0.12;
+    grass.receiveShadow = true;
+    group.add(grass);
+  }
+
+  // A plank bridge running along Z (connects main island to upper/lower).
+  _buildZBridge(x, z0, z1) {
+    const g = new THREE.Group();
+    this.group.add(g);
+    const n = Math.max(4, Math.round(Math.abs(z1 - z0) / 0.42));
+    for (let i = 0; i < n; i++) {
+      const z = z0 + (i / (n - 1)) * (z1 - z0);
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.46), toonMat(COLORS.palmTrunk, { flatShading: true }));
+      plank.position.set(x, 0.6, z);
+      plank.castShadow = true;
+      g.add(plank);
+    }
+    for (const sx of [-0.75, 0.75]) {
+      for (const z of [z0, (z0 + z1) / 2, z1]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5), toonMat(COLORS.trunk, { flatShading: true }));
+        post.position.set(x + sx, 0.84, z);
+        g.add(post);
+      }
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, Math.abs(z1 - z0)), toonMat(COLORS.trunk, { flatShading: true }));
+      rail.position.set(x + sx, 1.08, (z0 + z1) / 2);
+      g.add(rail);
+    }
+    return g;
+  }
+
+  // Register a facility station: an invisible hit target (for tapping) + record
+  // its world position (for the worker + production feedback).
+  _addFacilityStation(group, id, lx, ly, lz) {
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+    hit.position.set(lx, ly + 0.8, lz);
+    hit.userData.facility = id;
+    group.add(hit);
+    const pos = new THREE.Vector3(group.position.x + lx, group.position.y + ly, group.position.z + lz);
+    this.facilityStations[id] = { pos, hit };
+  }
+
+  _buildUpperIsland() {
+    if (this.upperIsland) return;
+    const g = new THREE.Group();
+    g.position.set(0, 0, -18);
+    this.upperIsland = g;
+    this.group.add(g);
+    const csz = 0.85;
+    const warp = { amp: 0.12, phase: 1.1, freqs: [3, 4, 6, 2] };
+    this._landmass(g, 7.0, 5.6, csz, warp);
+    const gy = 0.64;
+
+    // Bridge to the main island (main top edge ~ z -7).
+    this.upperBridge = this._buildZBridge(0, -7.2, -12.0);
+
+    // Oak trees in the centre, palm trees toward the outer (sea) edge.
+    for (const [x, z] of [[-2.0, -1.2], [2.0, -1.2], [0, 0.4]]) {
+      const t = this._makeOak();
+      t.position.set(x, gy, z);
+      t.scale.setScalar(0.9);
+      g.add(t);
+    }
+    for (const [x, z] of [[-4.0, -2.6], [4.0, -2.6], [-3.4, 1.2], [3.4, 1.2]]) {
+      const p = this._makePalm();
+      p.position.set(x, gy, z);
+      p.scale.setScalar(0.85);
+      g.add(p);
+    }
+    // Facility stations: acorn (centre), banana (sea side).
+    this._addFacilityStation(g, 'acornFarm', -1.2, gy, 2.0);
+    this._addFacilityStation(g, 'bananaFarm', 3.0, gy, 2.4);
+  }
+
+  _buildLowerIsland() {
+    if (this.lowerIsland) return;
+    const g = new THREE.Group();
+    g.position.set(0, 0, 16);
+    this.lowerIsland = g;
+    this.group.add(g);
+    const csz = 0.85;
+    const warp = { amp: 0.14, phase: 2.6, freqs: [2, 4, 5, 3] };
+    this._landmass(g, 4.2, 3.0, csz, warp); // very small
+    const gy = 0.64;
+
+    // Bridge to the main island (main bottom edge ~ z +7).
+    this.lowerBridge = this._buildZBridge(0, 7.2, 12.6);
+
+    // Left: fish farm — a little boat floating on the water.
+    const boat = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 0.4, 8, 1, false, 0, Math.PI), toonMat(0xb5793c, { flatShading: true }));
+    boat.rotation.z = Math.PI;
+    boat.rotation.y = Math.PI / 2;
+    boat.position.set(-4.6, 0.35, 0.2);
+    boat.scale.set(1, 1, 1.8);
+    g.add(boat);
+    this._addFacilityStation(g, 'fishFarm', -4.6, 0.5, 0.2);
+
+    // Right: clam harvesting — otters float on the water (built by FacilityMgr).
+    this._addFacilityStation(g, 'clamFarm', 4.6, 0.4, 0.2);
+  }
+
+  // Facility hit meshes (tappable) and world positions.
+  getFacilityHits() {
+    return Object.values(this.facilityStations).map((s) => s.hit);
+  }
+  getFacilityPos(id) {
+    return this.facilityStations[id] ? this.facilityStations[id].pos : null;
+  }
+
   // Obstacle circles (world x,z,r) that workers should path around.
   getObstacles() {
     const obs = [];
@@ -864,6 +990,13 @@ export class Island {
       disposeObject(this._stonePathGroup);
       this._stonePathGroup = null;
     }
+    for (const grp of ['upperIsland', 'lowerIsland', 'upperBridge', 'lowerBridge']) {
+      if (this[grp]) {
+        disposeObject(this[grp]);
+        this[grp] = null;
+      }
+    }
+    this.facilityStations = {};
     this.fountain = null;
     this._enabledFeatures.clear();
   }

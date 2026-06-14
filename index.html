@@ -378,6 +378,75 @@
         }
       }
 
+      /* Facility hire popup */
+      #facility-popup {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 28;
+      }
+      #facility-popup.show {
+        display: flex;
+      }
+      .fp-card {
+        position: relative;
+        background: var(--panel-bg);
+        border: 3px solid rgba(255, 255, 255, 0.8);
+        border-radius: 20px;
+        padding: 18px 26px 20px;
+        box-shadow: 0 10px 30px rgba(90, 70, 40, 0.3);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-width: 220px;
+      }
+      .fp-icon svg {
+        width: 46px;
+        height: 46px;
+      }
+      .fp-title {
+        font-weight: 800;
+        font-size: 18px;
+        color: var(--ink);
+      }
+      .fp-stat {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+        opacity: 0.8;
+      }
+      .fp-hire {
+        margin-top: 6px;
+        background: var(--accent);
+        box-shadow: 0 4px 0 #c96a26;
+        flex: none;
+        width: 100%;
+        font-size: 16px;
+      }
+      .fp-hire.affordable {
+        animation: pulse 1.1s ease-in-out infinite;
+      }
+      .fp-hire:disabled {
+        background: #c9bcab;
+        box-shadow: 0 4px 0 #a99b89;
+        cursor: default;
+        animation: none;
+      }
+      .fp-close {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        border: none;
+        background: transparent;
+        font-size: 18px;
+        font-weight: 800;
+        color: #a99b89;
+        cursor: pointer;
+      }
+
       /* Victory overlay */
       #victory {
         position: absolute;
@@ -560,6 +629,16 @@
           <div class="stat-row"><span class="k">Time Elapsed</span><span class="v" id="v-time">00:00</span></div>
         </div>
         <button id="replay-btn">Play Again</button>
+      </div>
+
+      <div id="facility-popup">
+        <div class="fp-card">
+          <button id="fp-close" class="fp-close">✕</button>
+          <span class="fp-icon" id="fp-icon"></span>
+          <div class="fp-title" id="fp-title">Farm</div>
+          <div class="fp-stat" id="fp-stat">Lv0 · 0/s</div>
+          <button id="fp-hire" class="game-btn fp-hire">고용</button>
+        </div>
       </div>
 
       <div id="start-gate">

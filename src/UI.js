@@ -1,6 +1,6 @@
 // UI.js — top HUD (coins + inventory as item icons), bottom button panel,
 // and the victory overlay. Pure DOM; reads from GameState.
-import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE } from './GameState.js';
+import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE, FACILITIES } from './GameState.js';
 
 // --- Recognizable 2D item icons (match the 3D models) ----------------------
 export function coinIconSVG() {
@@ -120,7 +120,7 @@ function albaButtonText(type, level, cost) {
 }
 
 export class UI {
-  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, audio }) {
+  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, onFacilityHire, audio }) {
     this.audio = audio;
     this.onUpgrade = onUpgrade;
     this.onStock = onStock;
@@ -128,6 +128,7 @@ export class UI {
     this.onStart = onStart;
     this.onHire = onHire;
     this.onTestMoney = onTestMoney;
+    this.onFacilityHire = onFacilityHire;
 
     this.coinValueEl = document.getElementById('coin-value');
     const coinIcon = document.getElementById('coin-icon');
@@ -184,6 +185,29 @@ export class UI {
           this.onTestMoney && this.onTestMoney();
         });
       }
+    }
+
+    // Facility popup.
+    this.fp = {
+      popup: document.getElementById('facility-popup'),
+      icon: document.getElementById('fp-icon'),
+      title: document.getElementById('fp-title'),
+      stat: document.getElementById('fp-stat'),
+      hire: document.getElementById('fp-hire'),
+      close: document.getElementById('fp-close'),
+    };
+    this._facilityId = null;
+    if (this.fp.hire) {
+      this._bindButton(this.fp.hire, () => {
+        this.audio?.uiTap();
+        if (this._facilityId) this.onFacilityHire && this.onFacilityHire(this._facilityId);
+      });
+    }
+    if (this.fp.close) {
+      this._bindButton(this.fp.close, () => {
+        this.audio?.uiTap();
+        this.closeFacility();
+      });
     }
 
     // Alba hire buttons (data-driven from ALBA_TYPES).
@@ -315,6 +339,42 @@ export class UI {
         el.btn.disabled = !can;
         el.btn.classList.toggle('afford', can);
       }
+    }
+
+    // Keep the facility popup's hire button live with the coin balance.
+    if (this._facilityId) this.refreshFacility(this._facilityId);
+  }
+
+  // --- Facility popup ----------------------------------------------------
+  openFacility(id) {
+    if (!this.fp.popup || !FACILITIES[id]) return;
+    this._facilityId = id;
+    this.fp.icon.innerHTML = itemIconSVG(FACILITIES[id].item);
+    this.fp.title.textContent = FACILITIES[id].kr;
+    this.fp.popup.classList.add('show');
+    this.refreshFacility(id);
+  }
+
+  closeFacility() {
+    this._facilityId = null;
+    if (this.fp.popup) this.fp.popup.classList.remove('show');
+  }
+
+  refreshFacility(id) {
+    if (!this._facilityId || this._facilityId !== id) return;
+    const lvl = gameState.facilityLevel(id);
+    const rate = gameState.facilityRate(id).toFixed(1);
+    const cost = gameState.facilityCost(id);
+    this.fp.stat.textContent = `Lv${lvl} · ${rate}/초`;
+    if (cost === null) {
+      this.fp.hire.textContent = 'MAX';
+      this.fp.hire.disabled = true;
+      this.fp.hire.classList.remove('affordable');
+    } else {
+      this.fp.hire.textContent = `${lvl === 0 ? '고용' : '레벨업'} · ${cost}`;
+      const can = gameState.canHireFacility(id);
+      this.fp.hire.disabled = !can;
+      this.fp.hire.classList.toggle('affordable', can);
     }
   }
 

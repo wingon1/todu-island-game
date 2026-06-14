@@ -9,6 +9,7 @@ import { Island } from './Island.js';
 import { Store } from './Store.js';
 import { AnimalManager } from './Animal.js';
 import { WorkerManager } from './Worker.js';
+import { FacilityManager } from './Facility.js';
 import { UI, itemIconSVG } from './UI.js';
 
 // ---------------------------------------------------------------------------
@@ -90,7 +91,7 @@ let view = gameState.config.viewW || 9.5; // ortho half-width (zoom control)
 const VIEW_MIN = 5;
 const VIEW_MAX = 18;
 // How far the look-target may roam (covers both islands + a margin).
-const BOUND = { minX: -7, maxX: 20, minZ: -8, maxZ: 8 };
+const BOUND = { minX: -8, maxX: 20, minZ: -22, maxZ: 20 };
 let breatheT = 0;
 
 // Smooth focus animation (on stage change) and pan inertia.
@@ -214,6 +215,15 @@ const workers = new WorkerManager(scene, island, store, particles, audio, {
   },
 });
 
+// Stage-5 production facilities: auto-produce resources into the inventory.
+const facilities = new FacilityManager(scene, island, audio, {
+  onProduce: (item, _pos, count) => {
+    for (let i = 0; i < count; i++) gameState.addToInventory(item);
+    ui.bumpChip(item);
+    scheduleSave();
+  },
+});
+
 let paused = true; // until Start tapped
 let gameOver = gameState.stage >= FINAL_STAGE && gameState.finalSaleDone;
 
@@ -225,6 +235,7 @@ const ui = new UI({
   onReplay: () => doReplay(),
   onHire: (type) => doHire(type),
   onTestMoney: () => doTestMoney(),
+  onFacilityHire: (id) => doFacilityHire(id),
 });
 
 function restoreWorldFromState() {
@@ -232,6 +243,7 @@ function restoreWorldFromState() {
   for (let s = 2; s <= gameState.stage; s++) island.applyUnlocks(s);
   store.build(gameState.stage);
   workers.reset();
+  facilities.reset();
   animals.reset();
   setCameraToStage();
   applyCamera();
@@ -256,6 +268,13 @@ function handleTap(clientX, clientY) {
   pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
+
+  // Facility station tapped -> open its hire/upgrade popup.
+  const fHits = raycaster.intersectObjects(island.getFacilityHits(), false);
+  if (fHits.length) {
+    ui.openFacility(fHits[0].object.userData.facility);
+    return;
+  }
 
   const hits = raycaster.intersectObjects(island.getHitMeshes(), false);
   if (hits.length === 0) return;
@@ -498,6 +517,14 @@ function doHire(type) {
   }
 }
 
+function doFacilityHire(id) {
+  if (gameState.hireFacility(id)) {
+    audio.coinRegister();
+    ui.refreshFacility(id);
+    scheduleSave();
+  }
+}
+
 // Test helper: grant enough coins to afford the next upgrade right away.
 function doTestMoney() {
   const cost = gameState.config.upgradeCost; // null at final stage
@@ -527,6 +554,7 @@ function doReplay() {
   store.reset();
   animals.reset();
   workers.reset();
+  facilities.reset();
   particles.resetAll();
   ui._buildInventoryChips();
   ui._lastCoins = -1;
@@ -572,6 +600,7 @@ function animate() {
     store.update(dt, elapsed);
     animals.update(dt, elapsed, true);
     workers.update(dt, elapsed);
+    facilities.update(dt, elapsed);
 
     // Victory: first sale of the final resource at the final stage.
     if (gameState.stage >= FINAL_STAGE && gameState.finalSaleDone) {
@@ -602,4 +631,4 @@ function animate() {
 animate();
 
 // Expose a few handles for debugging in the console.
-window.__game = { gameState, island, store, animals, workers, particles };
+window.__game = { gameState, island, store, animals, workers, facilities, particles };
