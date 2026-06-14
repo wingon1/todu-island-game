@@ -562,38 +562,31 @@ export class Island {
     this._scatterPebbles(g, 6, 3.6, 4.2, csz, 0.5);
   }
 
+  // Garden bridge — runs along X. Same design as the upper/lower plank bridges
+  // (_buildZBridge), just oriented sideways, so every island bridge matches.
   _buildBridge() {
     const g = new THREE.Group();
     this.group.add(g);
     this.bridgeGroup = g;
     const x0 = 9.0; // main-island edge
     const x1 = 11.6; // second-island edge
-    const n = 8;
+    const n = Math.max(4, Math.round(Math.abs(x1 - x0) / 0.42));
     for (let i = 0; i < n; i++) {
       const x = x0 + (i / (n - 1)) * (x1 - x0);
       const plank = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 1.5), toonMat(COLORS.palmTrunk, { flatShading: true }));
-      plank.position.set(x, 0.6, 0); // raised to the island-edge height
+      plank.position.set(x, 0.6, 0);
       plank.castShadow = true;
       g.add(plank);
     }
-    for (const z of [-0.75, 0.75]) {
+    for (const sz of [-0.75, 0.75]) {
       for (const x of [x0, (x0 + x1) / 2, x1]) {
         const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5), toonMat(COLORS.trunk, { flatShading: true }));
-        post.position.set(x, 0.84, z);
-        post.castShadow = true;
+        post.position.set(x, 0.84, sz);
         g.add(post);
       }
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.06, 0.06), toonMat(COLORS.trunk, { flatShading: true }));
-      rail.position.set((x0 + x1) / 2, 1.08, z);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(x1 - x0), 0.06, 0.06), toonMat(COLORS.trunk, { flatShading: true }));
+      rail.position.set((x0 + x1) / 2, 1.08, sz);
       g.add(rail);
-    }
-    // Short support legs down to the water so the raised deck reads naturally.
-    for (const x of [x0 + 0.3, x1 - 0.3]) {
-      for (const z of [-0.6, 0.6]) {
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 5), toonMat(COLORS.trunk, { flatShading: true }));
-        leg.position.set(x, 0.2, z);
-        g.add(leg);
-      }
     }
   }
 
