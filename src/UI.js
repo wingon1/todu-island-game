@@ -118,10 +118,11 @@ const STOCKER_UNLOCK_TEXT = {
   5: '3개씩 진열',
 };
 
-function albaButtonText(type, level, cost) {
+function albaButtonText(type, level, cost, stageLocked = false) {
   const maxLevel = ALBA_INFO[type]?.maxLevel ?? level;
   if (cost === null || level >= maxLevel) return `Lv${level} · MAX`;
   const next = level + 1;
+  if (stageLocked) return `Lv${next} · 다음 스테이지 잠김`;
   if (type === 'harvester') return `Lv${next} ${HARVESTER_UNLOCK_TEXT[next] || '강화'} · ${cost}`;
   if (type === 'stocker') return `Lv${next} ${STOCKER_UNLOCK_TEXT[next] || '강화'} · ${cost}`;
   return `Lv${next} · ${cost}`;
@@ -422,7 +423,8 @@ export class UI {
       if (!el) continue;
       const lvl = gameState.albaLevel(type);
       const cst = gameState.albaCost(type);
-      el.cost.textContent = albaButtonText(type, lvl, cst);
+      const stageLocked = gameState.isAlbaStageLocked(type);
+      el.cost.textContent = albaButtonText(type, lvl, cst, stageLocked);
       if (cst === null) {
         el.btn.disabled = true;
         el.btn.classList.remove('afford');
@@ -556,10 +558,11 @@ export class UI {
     const up = gameState.nextShelfDisplayUpgrade();
     const mode = gameState.shelfDisplayMode();
     if (!up) {
+      const maxItems = gameState.shelfCapacity;
       return this._card({
         icon: itemIconSVG('honey'),
         title: '진열 설비 완료',
-        desc: `현재 ${mode === 'crate' ? '상자 진열' : '바구니 진열'} · 상품별로 깔끔하게 보여줘요`,
+        desc: `현재 ${mode === 'crate' ? '상자 진열' : '바구니 진열'} · 최대 ${maxItems}개 진열`,
         button: 'MAX',
         disabled: true,
       });
@@ -584,11 +587,12 @@ export class UI {
       const lvl = gameState.albaLevel(type);
       const cost = gameState.albaCost(type);
       const can = gameState.canHireAlba(type);
+      const stageLocked = gameState.isAlbaStageLocked(type);
       const max = cost === null || lvl >= info.maxLevel;
       let desc = `Lv${lvl} · `;
       if (type === 'harvester') {
         const next = Math.min(lvl + 1, info.maxLevel);
-        desc += max ? '모든 수확 도움 완료' : `다음: ${HARVESTER_UNLOCK_TEXT[next] || '강화'}`;
+        desc += max ? '모든 수확 도움 완료' : stageLocked ? '다음 스테이지에서 공개돼요' : `다음: ${HARVESTER_UNLOCK_TEXT[next] || '강화'}`;
       } else {
         const next = Math.min(lvl + 1, info.maxLevel);
         desc += max ? '선반을 빠르게 골고루 채워요' : `다음: ${STOCKER_UNLOCK_TEXT[next] || '강화'}`;
@@ -597,7 +601,7 @@ export class UI {
         icon: type === 'harvester' ? itemIconSVG('acorn') : itemIconSVG('banana'),
         title: info.kr,
         desc,
-        button: max ? 'MAX' : this._costText(cost, can),
+        button: stageLocked ? '잠김' : max ? 'MAX' : this._costText(cost, can),
         action: 'hire-alba',
         attrs: `data-type="${type}"`,
         affordable: can,

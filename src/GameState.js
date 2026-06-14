@@ -96,8 +96,8 @@ export const FACILITIES = {
 export const FACILITY_IDS = Object.keys(FACILITIES);
 
 export const SHELF_DISPLAY_UPGRADES = [
-  { level: 1, id: 'basket', kr: '바구니 진열', stage: 4, cost: 800, desc: '같은 상품을 아기자기한 바구니로 정리해요' },
-  { level: 2, id: 'crate', kr: '상자 진열', stage: 5, cost: 2500, desc: '후반 상품을 나무 상자로 깔끔하게 정리해요' },
+  { level: 1, id: 'basket', kr: '바구니 진열', stage: 4, cost: 800, desc: '최대 8개 진열 · 같은 상품을 바구니로 묶어요' },
+  { level: 2, id: 'crate', kr: '상자 진열', stage: 5, cost: 2500, desc: '최대 10개 진열 · 같은 상품을 상자로 묶어요' },
 ];
 
 export class GameState {
@@ -227,13 +227,22 @@ export class GameState {
     if (lvl >= info.maxLevel) return null;
     return Math.round(info.baseCost * Math.pow(info.costMul, lvl));
   }
+  albaRequiredStage(type, level = this.albaLevel(type) + 1) {
+    if (type !== 'harvester') return 1;
+    return Math.min(level, FINAL_STAGE);
+  }
+  isAlbaStageLocked(type) {
+    const cost = this.albaCost(type);
+    if (cost === null) return false;
+    return this.stage < this.albaRequiredStage(type);
+  }
   canHireAlba(type) {
     const cost = this.albaCost(type);
-    return cost !== null && this.coins >= cost;
+    return cost !== null && !this.isAlbaStageLocked(type) && this.coins >= cost;
   }
   hireAlba(type) {
     const cost = this.albaCost(type);
-    if (cost === null || this.coins < cost) return false;
+    if (cost === null || this.isAlbaStageLocked(type) || this.coins < cost) return false;
     this.coins -= cost;
     this.alba[type] += 1;
     return true;
