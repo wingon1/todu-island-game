@@ -61,6 +61,13 @@ export const ALBA_INFO = {
   stocker: { label: 'Stocker', kr: '진열 알바', baseCost: 150, costMul: 1.7, maxLevel: 1 },
 };
 
+// Concurrent-customer cap for performance. Each customer is ~20 small
+// low-poly meshes; with the rest of the scene, ~18 concurrent stays within a
+// comfortable 60fps budget on mid-range mobile. The per-stage formula adds 2
+// each stage and is clamped to this cap, so stages can grow indefinitely.
+export const MAX_CUSTOMERS = 18;
+export const BASE_CUSTOMERS = 3; // stage 1 concurrent customers
+
 export class GameState {
   constructor() {
     this.reset();
@@ -149,6 +156,24 @@ export class GameState {
     return items[Math.floor(Math.random() * items.length)];
   }
 
+  // How many items this customer will try to buy: 1 .. (number of item types).
+  // Higher stages make "big buyers" more likely (the +1 chance grows).
+  customerBuyCount() {
+    const maxN = this.availableItems.length;
+    const p = Math.min(0.85, 0.15 + (this.stage - 1) * 0.12); // chance to add one more
+    let count = 1;
+    while (count < maxN && Math.random() < p) count++;
+    return count;
+  }
+
+  // A shopping list of item types (length = customerBuyCount).
+  makeShoppingList() {
+    const n = this.customerBuyCount();
+    const list = [];
+    for (let i = 0; i < n; i++) list.push(this.randomDesiredItem());
+    return list;
+  }
+
   canUpgrade() {
     const cost = this.config.upgradeCost;
     return cost !== null && this.coins >= cost;
@@ -199,6 +224,17 @@ export class GameState {
   }
   clerkBonus() {
     return this.albaLevel('clerk') * 0.12;
+  }
+
+  // --- Customer flow scaling (income grows with stage) ----------------------
+  // +2 concurrent customers per stage, capped for performance.
+  maxCustomers() {
+    return Math.min(MAX_CUSTOMERS, BASE_CUSTOMERS + (this.stage - 1) * 2);
+  }
+  // Arrivals get faster each stage so the extra slots actually fill up.
+  customerSpawnInterval() {
+    const base = Math.max(1.6, 7 / (1 + (this.stage - 1) * 0.4));
+    return base * this.clerkSpawnFactor();
   }
 
   // --- Save / load (localStorage) ------------------------------------------

@@ -2,7 +2,7 @@
 // and a pooled set of reusable animal models (pool size 6, max 3 concurrent).
 import * as THREE from 'three';
 import { toonMat, makeItem, disposeObject } from './toon.js';
-import { gameState, ITEM_COLORS } from './GameState.js';
+import { gameState, ITEM_COLORS, MAX_CUSTOMERS } from './GameState.js';
 
 // Species registry — add a customer species by adding one entry.
 // ear.pos gives the RIGHT ear (left is mirrored on x). Omitting ear/tail uses
@@ -36,12 +36,14 @@ export class AnimalManager {
     this.pool = [];
     this.spawnTimer = 4; // first one arrives a little sooner
     this.activeCount = 0;
+    this._usedSlots = new Set(); // stable serve-slot indices (no overlap)
 
     this._buildPool();
   }
 
   _buildPool() {
-    for (let i = 0; i < 6; i++) {
+    // Pool sized to the concurrent cap so spawns never allocate at runtime.
+    for (let i = 0; i < MAX_CUSTOMERS; i++) {
       const c = this._makeCustomer();
       c.group.visible = false;
       this.scene.add(c.group);
@@ -126,11 +128,11 @@ export class AnimalManager {
       bubble.add(puff);
     }
     // Item holder sits in FRONT of the cloud (toward the camera) so the goods
-    // are not hidden inside the opaque cloud.
+    // are not hidden inside the opaque cloud. Items are laid out in a row.
     const itemHolder = new THREE.Group();
-    // Raised toward the cloud centre (items are base-aligned, so they would
-    // otherwise hang low) and pushed in front of the cloud.
-    itemHolder.position.set(0, 0.04, 0.34);
+    // Items are bbox-centered, but their tall thin tops (stems/lids) bias the
+    // visual weight downward — so lift the whole row up into the bubble centre.
+    itemHolder.position.set(0, 0.12, 0.34);
     bubble.add(itemHolder);
     // Raised above the head (clears tall rabbit ears) and shifted left.
     bubble.position.set(-0.4, 1.95, 0);
@@ -141,12 +143,15 @@ export class AnimalManager {
       group,
       parts: { body, belly, head, earL, earR, tail, bodyMat, bellyMat },
       bubble,
+      bubbleCloud: cloud,
       itemHolder,
-      itemMesh: null,
+      itemMeshes: [], // one mesh per shopping-list item (left→right)
+      boughtIndex: 0,
       state: STATE.WALK_IN,
       active: false,
       species: 'squirrel',
-      desired: 'acorn',
+      wantList: [],
+      boughtAny: false,
       waypoints: [],
       wpIndex: 0,
       walkProgress: 0,
@@ -173,32 +178,50 @@ export class AnimalManager {
     tail.position.set(t.pos[0], t.pos[1], t.pos[2]);
   }
 
-  _makeItemPrimitive(type) {
-    // Same recognizable model as the shelf/shore, shrunk to fit the bubble.
-    const mesh = makeItem(type);
-    mesh.scale.setScalar(0.62);
-    return mesh;
+  // Build the bubble's item row: one recognizable item per shopping-list entry,
+  // laid out left→right in order, and widen the cloud to fit them.
+  _buildBubbleRow(c, list) {
+    for (const m of c.itemMeshes) disposeObject(m);
+    c.itemMeshes = [];
+    const n = Math.max(1, list.length);
+    const spacing = 0.32;
+    for (let i = 0; i < list.length; i++) {
+      const m = makeItem(list[i]);
+      m.scale.setScalar(0.5);
+      m.position.set((i - (n - 1) / 2) * spacing, 0, 0);
+      // Vertically center each item by its bounding box — items are
+      // base-aligned and vary in height (flat shell/fish would sit too low).
+      if (THREE.Box3) {
+        const box = new THREE.Box3().setFromObject(m);
+        const cy = (box.min.y + box.max.y) / 2;
+        if (Number.isFinite(cy)) m.position.y = -cy;
+      }
+      c.itemHolder.add(m);
+      c.itemMeshes.push(m);
+    }
+    // Cloud width is proportional to the item COUNT: 1 item = a small round
+    // bubble, and each extra item widens it by one item-slot (height stays).
+    c.bubbleCloud.scale.set(1.05 + (n - 1) * (spacing / 0.52), 0.95, 1);
   }
 
-  _setDesired(c, type) {
-    c.desired = type;
-    if (c.itemMesh) {
-      disposeObject(c.itemMesh);
-      c.itemMesh = null;
-    }
-    const m = this._makeItemPrimitive(type);
-    c.itemHolder.add(m);
-    c.itemMesh = m;
+  // Mark the item at `index` as bought (fade/scale it out, keep order intact).
+  _markBought(c, index) {
+    const m = c.itemMeshes[index];
+    if (m) m.visible = false;
   }
 
   spawn() {
-    if (this.activeCount >= 3) return;
+    if (this.activeCount >= gameState.maxCustomers()) return;
     const c = this.pool.find((p) => !p.active);
     if (!c) return;
 
     const species = gameState.availableCustomers[Math.floor(Math.random() * gameState.availableCustomers.length)];
     this._applySpecies(c, species);
-    this._setDesired(c, gameState.randomDesiredItem());
+    // Shopping list of 1..N items (more likely to be big at higher stages).
+    c.wantList = gameState.makeShoppingList();
+    c.boughtAny = false;
+    c.boughtIndex = 0;
+    this._buildBubbleRow(c, c.wantList); // wide bubble showing items in order
 
     // Waypoints: edge -> mid -> serve position.
     // Spawn at the front coast (toward the camera) near the centre, then walk
@@ -210,9 +233,18 @@ export class AnimalManager {
       0.64,
       (edge.z + serve.z) / 2 + 0.6
     );
-    // Slight horizontal offset so 3 customers don't overlap exactly.
-    const lane = (this.activeCount - 1) * 1.0;
-    serve.x += lane;
+    // Give this customer the lowest FREE serve slot (stable while it stands),
+    // then place it in a centered grid in front of the store so no two
+    // customers overlap.
+    let slot = 0;
+    while (this._usedSlots.has(slot)) slot++;
+    this._usedSlots.add(slot);
+    c.slot = slot;
+    const perRow = Math.min(6, Math.max(1, gameState.maxCustomers()));
+    const col = slot % perRow;
+    const row = Math.floor(slot / perRow);
+    serve.x += (col - (perRow - 1) / 2) * 1.15;
+    serve.z += row * 1.25;
 
     c.waypoints = [edge.clone(), mid, serve];
     c.wpIndex = 0;
@@ -244,8 +276,8 @@ export class AnimalManager {
     if (spawnEnabled) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        // Clerk alba speeds up customer arrivals.
-        this.spawnTimer = 8 * gameState.clerkSpawnFactor();
+        // Faster arrivals at higher stages (per GameState formula).
+        this.spawnTimer = gameState.customerSpawnInterval();
         this.spawn();
       }
     }
@@ -268,22 +300,34 @@ export class AnimalManager {
         // item in front of the cloud is always visible, regardless of facing.
         c.bubble.position.y = 1.95 + Math.sin(elapsed * 3) * 0.05;
         c.bubble.rotation.y = Math.PI / 4 - c.group.rotation.y;
-        if (c.itemMesh) c.itemMesh.rotation.y += dt * 2;
+        for (const m of c.itemMeshes) if (m.visible) m.rotation.y += dt * 2;
 
-        // Try to buy if item is on the shelf.
-        const value = this.callbacks.requestSell(c.desired);
+        // Buy through the shopping list, one item at a time, as each comes up
+        // on the shelf. Patience renews per item so big buyers can finish.
+        const want = c.wantList && c.wantList.length ? c.wantList[0] : null;
+        const value = want ? this.callbacks.requestSell(want) : false;
         if (value) {
-          // Success!
-          c.state = STATE.LEAVE_HAPPY;
-          c.bubble.visible = false;
-          this._setExit(c);
-          // Coin spawns handled by callback via main (particles).
+          c.boughtAny = true;
+          this._markBought(c, c.boughtIndex); // fade out the bought item in the row
+          c.boughtIndex++;
+          c.wantList.shift();
+          if (c.wantList.length === 0) {
+            // Done shopping — leave happy.
+            c.state = STATE.LEAVE_HAPPY;
+            c.bubble.visible = false;
+            this._setExit(c);
+          } else {
+            c.waitTimer = 5; // renew patience for the next item
+          }
         } else if (c.waitTimer <= 0) {
-          // Disappointed leave.
-          c.state = STATE.LEAVE_SAD;
+          // Ran out of patience: leave happy if they bought anything, else sad.
           c.bubble.visible = false;
-          // Small "×" puff.
-          this.particles.burstPuff(c.group.position.clone().setY(1.0), 5, 0xff7a7a);
+          if (c.boughtAny) {
+            c.state = STATE.LEAVE_HAPPY;
+          } else {
+            c.state = STATE.LEAVE_SAD;
+            this.particles.burstPuff(c.group.position.clone().setY(1.0), 5, 0xff7a7a);
+          }
           this._setExit(c);
         }
       } else if (c.state === STATE.LEAVE_HAPPY || c.state === STATE.LEAVE_SAD) {
@@ -343,6 +387,10 @@ export class AnimalManager {
     c.group.visible = false;
     c.group.scale.setScalar(c.baseScale);
     c.group.position.y = 0.64;
+    if (c.slot !== undefined && c.slot >= 0) {
+      this._usedSlots.delete(c.slot);
+      c.slot = -1;
+    }
     this.activeCount = Math.max(0, this.activeCount - 1);
   }
 
@@ -350,6 +398,7 @@ export class AnimalManager {
     for (const c of this.pool) {
       if (c.active) this._despawn(c);
     }
+    this._usedSlots.clear();
     this.activeCount = 0;
     this.spawnTimer = 4;
   }

@@ -21,7 +21,32 @@ export class Particles {
     this._initCoins();
     this._initLabels();
 
+    // Single aggregated income label: sums sales that land close together so
+    // the "+coins" text doesn't stack/overlap.
+    this._incomeEl = document.createElement('div');
+    this._incomeEl.className = 'coin-label';
+    this._incomeEl.style.fontSize = '24px';
+    this._incomeEl.style.opacity = '0';
+    this.labelLayer.appendChild(this._incomeEl);
+    this._income = { sum: 0, hold: 0, t: 0, x: 0, y: 0, active: false };
+
     this._tmpVec = new THREE.Vector3();
+  }
+
+  // Add a coin amount to the running income label (re-anchored to worldPos).
+  addIncome(value, worldPos) {
+    const s = this._project(worldPos);
+    this._income.sum += value;
+    this._income.x = s.x;
+    this._income.y = s.y;
+    this._income.hold = 0.55; // window to keep summing before it floats off
+    this._income.t = 0;
+    this._income.active = true;
+    this._incomeEl.textContent = `+${this._income.sum}`;
+    this._incomeEl.style.left = `${s.x}px`;
+    this._incomeEl.style.top = `${s.y}px`;
+    this._incomeEl.style.transform = 'translate(-50%, -50%)';
+    this._incomeEl.style.opacity = '1';
   }
 
   // --- Cloud puffs (upgrade VFX) ----------------------------------------
@@ -194,8 +219,8 @@ export class Particles {
           c.mesh.visible = false;
           c.mesh.scale.setScalar(1);
           if (onCoinCollected) onCoinCollected(c.value);
-          // Floating label near collect start.
-          this.spawnLabel(c.collectStart, `+${c.value}`, '#ffd700');
+          // Add to the single aggregated income label (instead of stacking).
+          this.addIncome(c.value, c.collectStart);
         }
       }
     }
@@ -210,6 +235,23 @@ export class Particles {
       if (k >= 1) {
         l.active = false;
         l.el.style.opacity = '0';
+      }
+    }
+
+    // Aggregated income label: hold (keep summing) then float up & fade.
+    if (this._income.active) {
+      if (this._income.hold > 0) {
+        this._income.hold -= dt;
+      } else {
+        this._income.t += dt;
+        const k = Math.min(1, this._income.t / 0.9);
+        this._incomeEl.style.transform = `translate(-50%, -50%) translateY(${-60 * k}px)`;
+        this._incomeEl.style.opacity = String(1 - k);
+        if (k >= 1) {
+          this._income.active = false;
+          this._income.sum = 0;
+          this._incomeEl.style.opacity = '0';
+        }
       }
     }
   }
@@ -234,5 +276,8 @@ export class Particles {
       l.active = false;
       l.el.style.opacity = '0';
     }
+    this._income.active = false;
+    this._income.sum = 0;
+    this._incomeEl.style.opacity = '0';
   }
 }
