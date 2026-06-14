@@ -307,8 +307,14 @@ export class WorkerManager {
     w.cd -= dt;
     if (w.cd <= 0) {
       w.cd = gameState.stockerPeriod() || 1.5;
-      const t = gameState.stockOne();
-      if (t && this.callbacks.onStock) this.callbacks.onStock();
+      let stocked = false;
+      const batch = gameState.stockerBatchSize ? gameState.stockerBatchSize() : 1;
+      for (let i = 0; i < batch; i++) {
+        const t = gameState.stockOne();
+        if (!t) break;
+        stocked = true;
+      }
+      if (stocked && this.callbacks.onStock) this.callbacks.onStock();
     }
   }
 

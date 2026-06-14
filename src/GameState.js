@@ -57,8 +57,8 @@ export const ALBA_TYPES = ['harvester', 'stocker'];
 export const ALBA_INFO = {
   // Harvester: Lv1..5 unlock resource tiers 1..5; Lv6 = speed boost.
   harvester: { label: 'Harvester', kr: '수확 알바', baseCost: 120, costMul: 1.6, maxLevel: 6 },
-  // Stocker: single level; auto-stocks the shelf with an even variety.
-  stocker: { label: 'Stocker', kr: '진열 알바', baseCost: 150, costMul: 1.7, maxLevel: 1 },
+  // Stocker: improves refill speed and late-game batch stocking.
+  stocker: { label: 'Stocker', kr: '진열 알바', baseCost: 150, costMul: 1.7, maxLevel: 5 },
 };
 
 // Concurrent-customer cap for performance. Each customer is ~20 small
@@ -78,6 +78,11 @@ export const FACILITIES = {
   clamFarm: { item: 'shell', kr: '조개 수확장', base: 1.0, perLevel: 0.9, baseCost: 1800, costMul: 1.7, maxLevel: 8 },
 };
 export const FACILITY_IDS = Object.keys(FACILITIES);
+
+export const SHELF_DISPLAY_UPGRADES = [
+  { level: 1, id: 'basket', kr: '바구니 진열', stage: 4, cost: 800, desc: '같은 상품을 아기자기한 바구니로 정리해요' },
+  { level: 2, id: 'crate', kr: '상자 진열', stage: 5, cost: 2500, desc: '후반 상품을 나무 상자로 깔끔하게 정리해요' },
+];
 
 export class GameState {
   constructor() {
@@ -99,6 +104,7 @@ export class GameState {
 
     this.alba = Object.fromEntries(ALBA_TYPES.map((t) => [t, 0]));
     this.facilities = Object.fromEntries(FACILITY_IDS.map((id) => [id, 0]));
+    this.shelfDisplayLevel = 0;
   }
 
   get config() {
@@ -229,7 +235,40 @@ export class GameState {
     return Math.min(this.albaLevel('harvester'), FINAL_STAGE);
   }
   stockerPeriod() {
-    return this.albaLevel('stocker') <= 0 ? null : 1.5;
+    const lvl = this.albaLevel('stocker');
+    if (lvl <= 0) return null;
+    return [null, 1.5, 1.2, 0.9, 0.9, 0.75][lvl] || 0.75;
+  }
+  stockerBatchSize() {
+    const lvl = this.albaLevel('stocker');
+    if (lvl <= 0) return 0;
+    if (lvl >= 5) return 3;
+    if (lvl >= 4) return 2;
+    return 1;
+  }
+  stockCounts() {
+    const out = Object.fromEntries(ITEM_TYPES.map((t) => [t, 0]));
+    for (const type of this.shelf) if (out[type] !== undefined) out[type] += 1;
+    return out;
+  }
+  shelfDisplayMode() {
+    if (this.shelfDisplayLevel >= 2) return 'crate';
+    if (this.shelfDisplayLevel >= 1) return 'basket';
+    return 'single';
+  }
+  nextShelfDisplayUpgrade() {
+    return SHELF_DISPLAY_UPGRADES.find((u) => u.level === this.shelfDisplayLevel + 1) || null;
+  }
+  canBuyShelfDisplayUpgrade() {
+    const up = this.nextShelfDisplayUpgrade();
+    return !!up && this.stage >= up.stage && this.coins >= up.cost;
+  }
+  buyShelfDisplayUpgrade() {
+    const up = this.nextShelfDisplayUpgrade();
+    if (!up || this.stage < up.stage || this.coins < up.cost) return false;
+    this.coins -= up.cost;
+    this.shelfDisplayLevel = up.level;
+    return true;
   }
   clerkSpawnFactor() {
     return Math.max(0.45, 1 - this.albaLevel('clerk') * 0.12);
@@ -291,6 +330,7 @@ export class GameState {
         finalSaleDone: this.finalSaleDone,
         alba: this.alba,
         facilities: this.facilities,
+        shelfDisplayLevel: this.shelfDisplayLevel,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -315,6 +355,7 @@ export class GameState {
       this.finalSaleDone = !!d.finalSaleDone;
       this.alba = Object.assign(Object.fromEntries(ALBA_TYPES.map((t) => [t, 0])), d.alba || {});
       this.facilities = Object.assign(Object.fromEntries(FACILITY_IDS.map((id) => [id, 0])), d.facilities || {});
+      this.shelfDisplayLevel = Math.min(2, Math.max(0, d.shelfDisplayLevel || 0));
       this.startTime = performance.now() - (d.elapsed || 0) * 1000;
       return true;
     } catch (e) {

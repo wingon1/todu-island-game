@@ -110,17 +110,25 @@ const HARVESTER_UNLOCK_TEXT = {
   6: '속도↑',
 };
 
+const STOCKER_UNLOCK_TEXT = {
+  1: '자동 진열',
+  2: '보충 1.2초',
+  3: '보충 0.9초',
+  4: '2개씩 진열',
+  5: '3개씩 진열',
+};
+
 function albaButtonText(type, level, cost) {
   const maxLevel = ALBA_INFO[type]?.maxLevel ?? level;
   if (cost === null || level >= maxLevel) return `Lv${level} · MAX`;
   const next = level + 1;
   if (type === 'harvester') return `Lv${next} ${HARVESTER_UNLOCK_TEXT[next] || '강화'} · ${cost}`;
-  if (type === 'stocker') return `자동진열 · ${cost}`;
+  if (type === 'stocker') return `Lv${next} ${STOCKER_UNLOCK_TEXT[next] || '강화'} · ${cost}`;
   return `Lv${next} · ${cost}`;
 }
 
 export class UI {
-  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, onFacilityHire, audio }) {
+  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, onFacilityHire, onShelfDisplayUpgrade, audio }) {
     this.audio = audio;
     this.onUpgrade = onUpgrade;
     this.onStock = onStock;
@@ -129,6 +137,7 @@ export class UI {
     this.onHire = onHire;
     this.onTestMoney = onTestMoney;
     this.onFacilityHire = onFacilityHire;
+    this.onShelfDisplayUpgrade = onShelfDisplayUpgrade;
 
     this.coinValueEl = document.getElementById('coin-value');
     const coinIcon = document.getElementById('coin-icon');
@@ -394,7 +403,8 @@ export class UI {
     const hasAffordableUpgrade = gameState.canUpgrade();
     const hasAffordableAlba = ALBA_TYPES.some((type) => gameState.canHireAlba(type));
     const hasAffordableFacility = Object.keys(FACILITIES).some((id) => gameState.stage >= 5 && gameState.canHireFacility(id));
-    this.shopBtn.classList.toggle('has-buy', hasAffordableUpgrade || hasAffordableAlba || hasAffordableFacility);
+    const hasAffordableDisplay = gameState.canBuyShelfDisplayUpgrade && gameState.canBuyShelfDisplayUpgrade();
+    this.shopBtn.classList.toggle('has-buy', hasAffordableUpgrade || hasAffordableAlba || hasAffordableFacility || hasAffordableDisplay);
   }
 
   openShop(tab = this.shopTab || 'store', focusId = null) {
@@ -422,6 +432,7 @@ export class UI {
     if (action === 'upgrade') this.onUpgrade();
     if (action === 'hire-alba') this.onHire && this.onHire(btn.dataset.type);
     if (action === 'hire-facility') this.onFacilityHire && this.onFacilityHire(btn.dataset.id);
+    if (action === 'shelf-display') this.onShelfDisplayUpgrade && this.onShelfDisplayUpgrade();
     if (action === 'upgrade' && gameState.stage !== beforeStage) {
       this.closeShop();
       return;
@@ -437,6 +448,7 @@ export class UI {
       coins: gameState.coins,
       alba: gameState.alba,
       facilities: gameState.facilities,
+      shelfDisplayLevel: gameState.shelfDisplayLevel,
     });
     if (!force && snapshot === this._shopSnapshot) return;
     this._shopSnapshot = snapshot;
@@ -472,24 +484,53 @@ export class UI {
   _storeCards() {
     const cost = gameState.config.upgradeCost;
     const can = gameState.canUpgrade();
+    const cards = [];
     if (cost === null) {
-      return this._card({
+      cards.push(this._card({
         icon: this._storeIcon(),
         title: '가게 확장 완료',
         desc: `현재 ${gameState.config.name.replace('\n', ' ')} · 선반 ${gameState.shelfCapacity}칸`,
         button: 'MAX',
         disabled: true,
+      }));
+    } else {
+      const next = STAGES[gameState.stage + 1];
+      cards.push(this._card({
+        icon: this._storeIcon(),
+        title: `${next.name.replace('\n', ' ')}로 확장`,
+        desc: `새 자원과 손님이 열려요 · 선반 ${next.shelfSlots}칸`,
+        button: can ? `${cost}` : `${cost - gameState.coins} 부족`,
+        action: 'upgrade',
+        affordable: can,
+        disabled: !can,
+      }));
+    }
+    cards.push(this._shelfDisplayCard());
+    return cards.join('');
+  }
+
+  _shelfDisplayCard() {
+    const up = gameState.nextShelfDisplayUpgrade();
+    const mode = gameState.shelfDisplayMode();
+    if (!up) {
+      return this._card({
+        icon: itemIconSVG('honey'),
+        title: '진열 설비 완료',
+        desc: `현재 ${mode === 'crate' ? '상자 진열' : '바구니 진열'} · 상품별로 깔끔하게 보여줘요`,
+        button: 'MAX',
+        disabled: true,
       });
     }
-    const next = STAGES[gameState.stage + 1];
+    const stageLocked = gameState.stage < up.stage;
+    const can = gameState.canBuyShelfDisplayUpgrade();
     return this._card({
-      icon: this._storeIcon(),
-      title: `${next.name.replace('\n', ' ')}로 확장`,
-      desc: `새 자원과 손님이 열려요 · 선반 ${next.shelfSlots}칸`,
-      button: can ? `${cost}` : `${cost - gameState.coins} 부족`,
-      action: 'upgrade',
+      icon: up.id === 'basket' ? itemIconSVG('flower') : itemIconSVG('fish'),
+      title: up.kr,
+      desc: stageLocked ? `스테이지 ${up.stage}에서 구매할 수 있어요` : up.desc,
+      button: stageLocked ? '잠김' : can ? `${up.cost}` : `${up.cost - gameState.coins} 부족`,
+      action: 'shelf-display',
       affordable: can,
-      disabled: !can,
+      disabled: stageLocked || !can,
     });
   }
 
@@ -505,7 +546,8 @@ export class UI {
         const next = Math.min(lvl + 1, info.maxLevel);
         desc += max ? '모든 수확 도움 완료' : `다음: ${HARVESTER_UNLOCK_TEXT[next] || '강화'}`;
       } else {
-        desc += max ? '선반을 골고루 자동 진열해요' : '선반을 골고루 채워줘요';
+        const next = Math.min(lvl + 1, info.maxLevel);
+        desc += max ? '선반을 빠르게 골고루 채워요' : `다음: ${STOCKER_UNLOCK_TEXT[next] || '강화'}`;
       }
       return this._card({
         icon: type === 'harvester' ? itemIconSVG('acorn') : itemIconSVG('banana'),

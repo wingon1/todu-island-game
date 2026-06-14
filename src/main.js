@@ -236,6 +236,7 @@ const ui = new UI({
   onHire: (type) => doHire(type),
   onTestMoney: () => doTestMoney(),
   onFacilityHire: (id) => doFacilityHire(id),
+  onShelfDisplayUpgrade: () => doShelfDisplayUpgrade(),
 });
 
 function restoreWorldFromState() {
@@ -521,6 +522,14 @@ function doFacilityHire(id) {
   if (gameState.hireFacility(id)) {
     audio.coinRegister();
     ui.refreshFacility(id);
+    scheduleSave();
+  }
+}
+
+function doShelfDisplayUpgrade() {
+  if (gameState.buyShelfDisplayUpgrade()) {
+    audio.coinRegister();
+    store.refreshShelf();
     scheduleSave();
   }
 }

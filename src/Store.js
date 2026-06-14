@@ -507,8 +507,48 @@ export class Store {
     return mesh;
   }
 
+  _makeBasketMesh(type, count) {
+    const g = new THREE.Group();
+    const isCrate = gameState.shelfDisplayMode && gameState.shelfDisplayMode() === 'crate';
+    const wood = toonMat(0xc49a6c, { flatShading: true });
+    const dark = toonMat(0x8b5e3c, { flatShading: true });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(isCrate ? 0.46 : 0.36, isCrate ? 0.24 : 0.18, isCrate ? 0.36 : 0.3), wood);
+    base.position.y = isCrate ? 0.12 : 0.09;
+    g.add(base);
+    for (const z of [isCrate ? -0.21 : -0.17, isCrate ? 0.21 : 0.17]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(isCrate ? 0.52 : 0.42, 0.06, 0.035), dark);
+      rail.position.set(0, isCrate ? 0.27 : 0.2, z);
+      g.add(rail);
+    }
+    const item = makeItem(type);
+    item.scale.setScalar(isCrate ? 0.78 : 0.72);
+    item.position.set(0, isCrate ? 0.28 : 0.2, 0);
+    g.add(item);
+    const badge = new THREE.Group();
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 12), toonMat(0xfff3e0, { flatShading: true }));
+    coin.rotation.x = Math.PI / 2;
+    badge.add(coin);
+    const dots = Math.min(5, count);
+    for (let i = 0; i < dots; i++) {
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.018, 5, 4), toonMat(ITEM_COLORS[type] || 0xffffff, { flatShading: true }));
+      const a = (i / Math.max(1, dots)) * Math.PI * 2;
+      dot.position.set(Math.cos(a) * 0.055, Math.sin(a) * 0.055, 0.026);
+      badge.add(dot);
+    }
+    badge.position.set(isCrate ? 0.25 : 0.19, isCrate ? 0.42 : 0.34, isCrate ? 0.21 : 0.17);
+    badge.rotation.x = -0.4;
+    g.add(badge);
+    g.userData.count = count;
+    g.traverse((c) => (c.castShadow = true));
+    return g;
+  }
+
   // Sync displayed item meshes with gameState.shelf.
   refreshShelf() {
+    if (gameState.shelfDisplayMode && gameState.shelfDisplayMode() !== 'single') {
+      this._refreshBasketShelf();
+      return;
+    }
     // Remove extras.
     while (this.shelfItems.length > gameState.shelf.length) {
       const it = this.shelfItems.pop();
@@ -527,6 +567,27 @@ export class Store {
         this.shelfItems[i] = { mesh, type, t: Math.random() * Math.PI * 2 };
       }
       this.shelfItems[i].mesh.position.set(pos.x, pos.y, pos.z);
+    }
+  }
+
+  _refreshBasketShelf() {
+    const counts = gameState.stockCounts();
+    const entries = gameState.availableItems.filter((type) => counts[type] > 0).map((type) => ({ type, count: counts[type] }));
+    while (this.shelfItems.length > entries.length) {
+      const it = this.shelfItems.pop();
+      disposeObject(it.mesh);
+    }
+    for (let i = 0; i < entries.length; i++) {
+      const { type, count } = entries[i];
+      const pos = this.slotPositions[i] || this.slotPositions[this.slotPositions.length - 1];
+      const cur = this.shelfItems[i];
+      if (!cur || cur.type !== type || cur.count !== count || !cur.basket) {
+        if (cur) disposeObject(cur.mesh);
+        const mesh = this._makeBasketMesh(type, count);
+        this.group.add(mesh);
+        this.shelfItems[i] = { mesh, type, count, basket: true, t: Math.random() * Math.PI * 2 };
+      }
+      this.shelfItems[i].mesh.position.set(pos.x, pos.y + 0.02, pos.z);
     }
   }
 
