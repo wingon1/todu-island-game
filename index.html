@@ -166,7 +166,8 @@
         min-height: 24px;
         margin-bottom: -2px;
       }
-      #test-money {
+      #test-money,
+      #test-reset {
         font-family: inherit;
         border: 1px solid rgba(91, 70, 54, 0.08);
         cursor: pointer;
@@ -178,7 +179,12 @@
         padding: 5px 8px;
         box-shadow: none;
       }
-      #test-money:active {
+      #test-reset {
+        background: rgba(255, 140, 66, 0.18);
+        color: #9b6546;
+      }
+      #test-money:active,
+      #test-reset:active {
         transform: scale(0.95);
       }
 
@@ -210,6 +216,10 @@
         position: absolute;
         top: calc(6px + env(safe-area-inset-top));
         left: 10px;
+        pointer-events: auto;
+        cursor: pointer;
+        touch-action: manipulation;
+        user-select: none;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -836,6 +846,7 @@
       <div id="ui-panel">
         <div class="panel-top">
           <button id="test-money" title="테스트: 다음 단계 비용만큼 코인 충전">TEST +$</button>
+          <button id="test-reset" title="테스트: 로컬 세이브와 현재 진행 초기화">RESET</button>
         </div>
 
         <div class="button-row">

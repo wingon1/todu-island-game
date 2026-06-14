@@ -36,10 +36,26 @@ export const STAGES = {
 export const FINAL_STAGE = Math.max(...Object.keys(STAGES).map(Number));
 
 // ====== TEST MODE ======
-// Flip this ONE flag: true = ×5 coins + "TEST +$" button shown;
-// false = normal balance (×1) + the test button is hidden. Ship with false.
-export const TEST_MODE = true;
-export const COIN_MULTIPLIER = TEST_MODE ? 5 : 1;
+// Hidden local toggle. Tap the stage pill 7 times quickly to switch this on/off
+// for the current browser only.
+export const TEST_MODE_KEY = 'cozy-island-test-mode';
+export function isTestModeEnabled() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(TEST_MODE_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+export function setTestModeEnabled(enabled) {
+  try {
+    if (enabled) localStorage.setItem(TEST_MODE_KEY, '1');
+    else localStorage.removeItem(TEST_MODE_KEY);
+  } catch (e) {
+    /* storage unavailable — ignore */
+  }
+}
+export const TEST_MODE = isTestModeEnabled();
+export const COIN_MULTIPLIER = 1;
 const SAVE_KEY = 'cozy-island-tycoon-save-v1';
 
 // Tier of each resource = the first stage at which it appears. Used to gate

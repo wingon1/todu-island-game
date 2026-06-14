@@ -1,6 +1,6 @@
 // UI.js — top HUD (coins + inventory as item icons), bottom button panel,
 // and the victory overlay. Pure DOM; reads from GameState.
-import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE, FACILITIES, STAGES } from './GameState.js';
+import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE, FACILITIES, STAGES, setTestModeEnabled } from './GameState.js';
 
 // --- Recognizable 2D item icons (match the 3D models) ----------------------
 export function coinIconSVG() {
@@ -128,7 +128,7 @@ function albaButtonText(type, level, cost) {
 }
 
 export class UI {
-  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, onFacilityHire, onShelfDisplayUpgrade, audio }) {
+  constructor({ onUpgrade, onStock, onReplay, onStart, onHire, onTestMoney, onTestReset, onFacilityHire, onShelfDisplayUpgrade, audio }) {
     this.audio = audio;
     this.onUpgrade = onUpgrade;
     this.onStock = onStock;
@@ -136,6 +136,7 @@ export class UI {
     this.onStart = onStart;
     this.onHire = onHire;
     this.onTestMoney = onTestMoney;
+    this.onTestReset = onTestReset;
     this.onFacilityHire = onFacilityHire;
     this.onShelfDisplayUpgrade = onShelfDisplayUpgrade;
 
@@ -168,6 +169,8 @@ export class UI {
     this._lastInv = {};
     this._shopOpen = false;
     this._shopSnapshot = '';
+    this._stageTapCount = 0;
+    this._stageTapStart = 0;
 
     this._bindButton(this.upgradeBtn, () => {
       this.audio?.uiTap();
@@ -186,6 +189,9 @@ export class UI {
       this.hideVictory();
       this.onReplay();
     });
+    if (this.stagePillEl) {
+      this._bindButton(this.stagePillEl, () => this._handleStagePillSecretTap());
+    }
 
     if (this.shopClose) {
       this._bindButton(this.shopClose, () => {
@@ -224,18 +230,30 @@ export class UI {
 
     // Test-only: top up coins to reach the next stage quickly.
     const testBtn = document.getElementById('test-money');
-    if (testBtn) {
+    const testResetBtn = document.getElementById('test-reset');
+    if (testBtn || testResetBtn) {
       if (!TEST_MODE) {
-        testBtn.style.display = 'none'; // hidden when test mode is off
-        const row = testBtn.closest('.panel-top');
+        if (testBtn) testBtn.style.display = 'none'; // hidden when test mode is off
+        if (testResetBtn) testResetBtn.style.display = 'none';
+        const row = (testBtn || testResetBtn).closest('.panel-top');
         if (row) row.style.display = 'none';
       } else {
-        const row = testBtn.closest('.panel-top');
+        const row = (testBtn || testResetBtn).closest('.panel-top');
         if (row) row.style.display = 'flex';
-        this._bindButton(testBtn, () => {
-          this.audio?.uiTap();
-          this.onTestMoney && this.onTestMoney();
-        });
+        if (testBtn) {
+          this._bindButton(testBtn, () => {
+            this.audio?.uiTap();
+            this.onTestMoney && this.onTestMoney();
+          });
+        }
+        if (testResetBtn) {
+          this._bindButton(testResetBtn, () => {
+            this.audio?.uiTap();
+            if (window.confirm('테스트 세이브를 초기화할까요?')) {
+              this.onTestReset && this.onTestReset();
+            }
+          });
+        }
       }
     }
 
@@ -301,6 +319,27 @@ export class UI {
       if (el.disabled) return;
       handler();
     });
+  }
+
+  _handleStagePillSecretTap() {
+    const now = performance.now();
+    if (now - this._stageTapStart > 2200) {
+      this._stageTapStart = now;
+      this._stageTapCount = 0;
+    }
+    this._stageTapCount += 1;
+    if (this._stageTapCount < 7) return;
+
+    this._stageTapCount = 0;
+    this._stageTapStart = 0;
+    this.audio?.uiTap();
+    const next = !TEST_MODE;
+    const message = next
+      ? '테스트 모드를 켤까요? 새로고침 후 TEST 버튼이 표시됩니다.'
+      : '테스트 모드를 끌까요? 새로고침 후 TEST 버튼이 숨겨집니다.';
+    if (!window.confirm(message)) return;
+    setTestModeEnabled(next);
+    window.location.reload();
   }
 
   _buildInventoryChips() {

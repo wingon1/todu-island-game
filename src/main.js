@@ -251,6 +251,7 @@ const ui = new UI({
   onReplay: () => doReplay(),
   onHire: (type) => doHire(type),
   onTestMoney: () => doTestMoney(),
+  onTestReset: () => doReplay(),
   onFacilityHire: (id) => doFacilityHire(id),
   onShelfDisplayUpgrade: () => doShelfDisplayUpgrade(),
 });
