@@ -34,6 +34,8 @@ export class Island {
     this.bridgeGroup = null;
     this.fountain = null;
     this._enabledFeatures = new Set();
+    this._cloudCovers = {};
+    this._mistTexture = null;
 
     this._water = null;
     this._buildWater();
@@ -41,6 +43,7 @@ export class Island {
     this._buildOakTrees();
     this._buildPalmTrees();
     this._buildShoreAnchors();
+    this._buildCloudCovers();
 
     // Feature registry — add a map feature by registering a builder here and
     // listing its id in a stage's `unlocks` (GameState STAGES).
@@ -422,10 +425,97 @@ export class Island {
   }
 
   _enableShore() {
+    this._clearCloudCover('shore');
     this.shoreActive = true;
     this._spawnShoreItem();
     this._spawnShoreItem();
     this.shoreTimer = 12;
+  }
+
+  // --- Locked-region cloud covers ---------------------------------------
+  _getMistTexture() {
+    if (this._mistTexture) return this._mistTexture;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0.0, 'rgba(255,255,255,0.96)');
+    grad.addColorStop(0.56, 'rgba(255,255,255,0.82)');
+    grad.addColorStop(0.84, 'rgba(255,255,255,0.42)');
+    grad.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    this._mistTexture = new THREE.CanvasTexture(canvas);
+    this._mistTexture.needsUpdate = true;
+    this._mistTexture.minFilter = THREE.LinearFilter;
+    this._mistTexture.magFilter = THREE.LinearFilter;
+    return this._mistTexture;
+  }
+
+  _makeCloudCover(key, x, z, radiusX, radiusZ, _count, y = 1.25) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.userData.baseY = y;
+    g.userData.phase = Math.random() * Math.PI * 2;
+    const mistMat = new THREE.MeshBasicMaterial({
+      color: 0xf8fbff,
+      map: this._getMistTexture(),
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mist = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mistMat);
+    mist.userData.mistPlane = true;
+    mist.rotation.x = -Math.PI / 2;
+    mist.scale.set(radiusX * 1.18, radiusZ * 1.18, 1);
+    mist.position.y = y - 0.28;
+    g.add(mist);
+    const mist2 = mist.clone();
+    mist2.userData.mistPlane = true;
+    mist2.material = mistMat.clone();
+    mist2.material.opacity = 0.82;
+    mist2.scale.set(radiusX * 1.55, radiusZ * 1.48, 1);
+    mist2.position.y = y - 0.38;
+    mist2.rotation.z = 0.35;
+    g.add(mist2);
+    this.group.add(g);
+    this._cloudCovers[key] = g;
+    return g;
+  }
+
+  _buildCloudCovers() {
+    this._clearAllCloudCovers();
+    return; // Fog covers disabled for now.
+    // Permanent far-water haze: any area outside the currently playable
+    // islands stays softly hidden instead of showing empty ocean.
+    this._makeCloudCover('outerWest', -22, 0, 8.5, 28, 18, 1.0);
+    this._makeCloudCover('outerEast', 35, 0, 7.5, 28, 18, 1.0);
+    this._makeCloudCover('outerNorth', 0, -35, 26, 8.0, 18, 1.0);
+    this._makeCloudCover('outerSouth', 0, 32, 26, 8.0, 18, 1.0);
+    // Top water just beyond the open main island; removed once the upper
+    // production island opens.
+    this._makeCloudCover('northWater', 0, -10.2, 9.6, 1.15, 10, 1.0);
+    // Beach/near-water collectibles are hidden until Stage 3.
+    this._makeCloudCover('shore', 0, 8.2, 9.0, 1.1, 13, 1.05);
+    // Future right-side garden island is hidden until Stage 4.
+    this._makeCloudCover('island2', 16.5, 0, 5.0, 5.4, 17, 1.35);
+    // Future production islands and surrounding water are hidden until Stage 5.
+    this._makeCloudCover('upperIsland', 0, -18, 9.6, 7.2, 17, 1.25);
+    this._makeCloudCover('lowerIsland', 0, 16, 7.2, 5.7, 14, 1.12);
+  }
+
+  _clearCloudCover(key) {
+    const g = this._cloudCovers[key];
+    if (!g) return;
+    disposeObject(g);
+    delete this._cloudCovers[key];
+  }
+
+  _clearAllCloudCovers() {
+    for (const key of Object.keys(this._cloudCovers || {})) this._clearCloudCover(key);
   }
 
   // --- Second island & garden features (Stage 4+) -----------------------
@@ -433,6 +523,7 @@ export class Island {
   // organic coastline (warp phase/freqs) and a domed, chunky top.
   _buildIsland2() {
     if (this.island2) return;
+    this._clearCloudCover('island2');
     const g = new THREE.Group();
     g.position.set(15.0, 0, 0); // closer to the main island
     this.island2 = g;
@@ -733,6 +824,8 @@ export class Island {
 
   _buildUpperIsland() {
     if (this.upperIsland) return;
+    this._clearCloudCover('upperIsland');
+    this._clearCloudCover('northWater');
     const g = new THREE.Group();
     g.position.set(0, 0, -18);
     this.upperIsland = g;
@@ -765,6 +858,7 @@ export class Island {
 
   _buildLowerIsland() {
     if (this.lowerIsland) return;
+    this._clearCloudCover('lowerIsland');
     const g = new THREE.Group();
     g.position.set(0, 0, 16);
     this.lowerIsland = g;
@@ -848,8 +942,8 @@ export class Island {
       fishBox.add(lump);
     }
 
-    // Right: clam harvesting — otters float on the water (built by FacilityMgr).
-    this._addFacilityStation(g, 'clamFarm', 4.6, 0.4, 0.2);
+    // Right: clam harvesting — otters float farther out on the water.
+    this._addFacilityStation(g, 'clamFarm', 5.85, 0.05, 0.85);
   }
 
   // Facility hit meshes (tappable) and world positions.
@@ -970,6 +1064,11 @@ export class Island {
   update(dt, elapsed, onAutoReady) {
     // Water animation.
     if (this._waterUniforms) this._waterUniforms.uTime.value = elapsed;
+    for (const cover of Object.values(this._cloudCovers)) {
+      const ph = cover.userData.phase || 0;
+      cover.position.y = Math.sin(elapsed * 0.75 + ph) * 0.035;
+      cover.rotation.y = Math.sin(elapsed * 0.18 + ph) * 0.025;
+    }
 
     // Harvest timers.
     for (const n of this.nodes) {
@@ -1061,5 +1160,6 @@ export class Island {
     this.facilityStations = {};
     this.fountain = null;
     this._enabledFeatures.clear();
+    this._buildCloudCovers();
   }
 }

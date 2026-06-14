@@ -175,16 +175,42 @@ export class FacilityManager {
   _makeOtters() {
     const g = new THREE.Group();
     for (let i = 0; i < 2; i++) {
-      const o = this._critter(0x9c6b46, 0xe6cfa8, 0.9);
-      // lay the otter on its back, floating
-      o.group.rotation.x = -1.3;
-      o.group.position.set((i - 0.5) * 0.7, 0.18, 0);
-      o.group.scale.setScalar(0.85);
-      // a shell resting on the belly
+      const o = this._critter(i === 0 ? 0xbec6c8 : 0xd0d5d4, 0xf0ece2, 0.9);
+      // Lay the otter on its back, floating. Each child keeps a phase so the
+      // brothers do not move identically.
+      o.group.rotation.x = -1.22;
+      o.group.position.set((i - 0.5) * 0.9, -0.08, i === 0 ? -0.1 : 0.12);
+      o.group.scale.setScalar(i === 0 ? 1.04 : 0.98);
+      o.group.userData.phase = i * Math.PI * 0.72;
+
+      // Round hands holding the shell on the belly.
+      for (const ex of [-0.15, 0.15]) {
+        const paw = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), o.bodyMat);
+        paw.scale.set(1, 0.78, 1);
+        paw.position.set(ex, 0.5, 0.26);
+        paw.castShadow = true;
+        o.group.add(paw);
+      }
       const shell = makeItem('shell');
-      shell.scale.setScalar(0.5);
-      shell.position.set(0, 0.55, 0.2);
+      shell.scale.setScalar(0.42);
+      shell.position.set(0, 0.43, 0.34);
+      shell.rotation.x = 0.25;
       o.group.add(shell);
+
+      // One brother gets a small pastel ribbon on the head.
+      if (i === 1) {
+        const ribbonMat = toonMat(0xff8fc0, { flatShading: true });
+        const knot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 7, 5), ribbonMat);
+        knot.position.set(0, 1.04, 0.12);
+        o.group.add(knot);
+        for (const sx of [-1, 1]) {
+          const loop = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.11, 5), ribbonMat);
+          loop.position.set(sx * 0.065, 1.04, 0.12);
+          loop.rotation.z = sx * Math.PI / 2;
+          loop.castShadow = true;
+          o.group.add(loop);
+        }
+      }
       g.add(o.group);
     }
     g.userData.otters = true;
@@ -202,7 +228,7 @@ export class FacilityManager {
     if (!this.workers[id]) {
       const w = this._build(id);
       const p = this.island.getFacilityPos(id);
-      if (p) w.group.position.set(p.x, id === 'clamFarm' ? 0.2 : 0.64, p.z);
+      if (p) w.group.position.set(p.x, id === 'clamFarm' ? -0.04 : 0.64, p.z);
       if (id === 'fishFarm') w.group.rotation.y = 0;
       w.home = w.group.position.clone();
       this.scene.add(w.group);
@@ -226,8 +252,15 @@ export class FacilityManager {
       w.group.position.y = 0.64 + Math.sin(elapsed * 1.5) * 0.025; // standing on the island edge
       if (w.swing) w.swing.rotation.x = Math.sin(elapsed * 2) * 0.25;
     } else if (id === 'clamFarm') {
-      w.group.position.y = 0.18 + Math.sin(elapsed * 1.3) * 0.05; // float
+      w.group.position.y = -0.04 + Math.sin(elapsed * 1.3) * 0.018; // partially submerged
       w.group.rotation.z = Math.sin(elapsed * 0.9) * 0.06;
+      if (w.group.userData.otters) {
+        w.group.children.forEach((child, i) => {
+          const ph = child.userData.phase || 0;
+          child.position.y = -0.08 + Math.sin(elapsed * (1.1 + i * 0.25) + ph) * 0.016;
+          child.rotation.z = Math.sin(elapsed * (0.8 + i * 0.18) + ph) * (i === 0 ? 0.08 : -0.1);
+        });
+      }
     }
   }
 
