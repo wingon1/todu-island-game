@@ -633,6 +633,33 @@ export class Island {
     }
     // Decorative pastel flowers filling the rest of the grass.
     this._scatterFlowers(nodeSpots);
+
+    const garden = new THREE.Group();
+    garden.position.set(3.0, this.island2GrassY, -0.2);
+    this.island2.add(garden);
+    for (const x of [-0.55, 0.55]) {
+      const fence = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.28, 0.95), toonMat(0xc49a6c, { flatShading: true }));
+      fence.position.set(x, 0.14, 0);
+      fence.castShadow = true;
+      garden.add(fence);
+    }
+    for (const z of [-0.42, 0.42]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.08), toonMat(0x8b5e3c, { flatShading: true }));
+      rail.position.set(0, 0.28, z);
+      rail.castShadow = true;
+      garden.add(rail);
+    }
+    for (let i = 0; i < 5; i++) {
+      const f = this._makeDecoFlower(i % 2 ? 0xffb6d5 : 0xffe9a3);
+      f.position.set(-0.38 + (i % 3) * 0.38, 0, -0.2 + Math.floor(i / 3) * 0.35);
+      f.scale.setScalar(0.78);
+      garden.add(f);
+    }
+    const can = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.18), toonMat(0x9fd3e8, { flatShading: true }));
+    can.position.set(0.72, 0.14, 0.32);
+    can.castShadow = true;
+    garden.add(can);
+    this._addFacilityStation(this.island2, 'flowerGarden', 2.35, this.island2GrassY, 0.75);
   }
 
   // Pastel decorative flowers (pink / yellow / sky-blue) scattered on the grass.
@@ -699,6 +726,25 @@ export class Island {
       hive.add(top);
       this._registerNode(hive, 'honey', 11, 0xf2a83a, false, false);
     }
+    const apiary = new THREE.Group();
+    apiary.position.set(-2.75, this.island2GrassY, -0.45);
+    this.island2.add(apiary);
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.55), toonMat(0x8b5e3c, { flatShading: true }));
+    stand.position.y = 0.18;
+    stand.castShadow = true;
+    apiary.add(stand);
+    for (let i = 0; i < 2; i++) {
+      const jar = makeItem('honey');
+      jar.scale.setScalar(0.58);
+      jar.position.set(-0.2 + i * 0.36, 0.28, 0.03);
+      apiary.add(jar);
+    }
+    for (let i = 0; i < 3; i++) {
+      const bee = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), toonMat(0xf2c14a, { flatShading: true }));
+      bee.position.set(-0.2 + i * 0.2, 0.72 + (i % 2) * 0.08, -0.35);
+      apiary.add(bee);
+    }
+    this._addFacilityStation(this.island2, 'honeyApiary', -2.75, this.island2GrassY, -0.45);
   }
 
   _buildFountain() {

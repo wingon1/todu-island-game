@@ -76,6 +76,8 @@ export const FACILITIES = {
   bananaFarm: { item: 'banana', kr: '바나나 농장', base: 1.2, perLevel: 1.0, baseCost: 1200, costMul: 1.7, maxLevel: 8 },
   fishFarm: { item: 'fish', kr: '물고기 양식장', base: 0.9, perLevel: 0.8, baseCost: 2000, costMul: 1.7, maxLevel: 8 },
   clamFarm: { item: 'shell', kr: '조개 수확장', base: 1.0, perLevel: 0.9, baseCost: 1800, costMul: 1.7, maxLevel: 8 },
+  flowerGarden: { item: 'flower', kr: '꽃 정원', base: 0.75, perLevel: 0.65, baseCost: 2600, costMul: 1.7, maxLevel: 8 },
+  honeyApiary: { item: 'honey', kr: '꿀 양봉장', base: 0.55, perLevel: 0.5, baseCost: 3600, costMul: 1.7, maxLevel: 8 },
 };
 export const FACILITY_IDS = Object.keys(FACILITIES);
 

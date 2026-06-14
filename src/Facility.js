@@ -217,10 +217,87 @@ export class FacilityManager {
     return { group: g };
   }
 
+  _makeFlowerRabbit() {
+    const c = this._critter(0xf6eee6, 0xfff7ef, 0.95);
+    const dressMat = toonMat(0xff9ac8, { flatShading: true });
+    c.body.material = dressMat;
+    for (const ex of [-0.11, 0.11]) {
+      const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.065, 0.42, 8), c.bodyMat);
+      ear.position.set(ex, 1.08, 0.04);
+      ear.rotation.z = ex * 0.9;
+      ear.castShadow = true;
+      c.group.add(ear);
+      const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.3, 6), toonMat(0xffc7d8, { flatShading: true }));
+      inner.position.set(ex, 1.08, 0.075);
+      inner.rotation.z = ear.rotation.z;
+      c.group.add(inner);
+    }
+    // Dress wraps the whole torso: the body itself is pink, with a rounded
+    // skirt around the lower body instead of a flat front panel.
+    const skirt = new THREE.Mesh(new THREE.SphereGeometry(0.31, 12, 8), dressMat);
+    skirt.scale.set(1.08, 0.58, 0.95);
+    skirt.position.set(0, 0.2, 0.02);
+    skirt.castShadow = true;
+    c.group.add(skirt);
+    const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.055, 12), toonMat(0xff78b6, { flatShading: true }));
+    hem.position.set(0, 0.08, 0.02);
+    c.group.add(hem);
+    for (const ex of [-0.18, 0.18]) {
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), c.bellyMat);
+      hand.position.set(ex, 0.46, 0.25);
+      hand.castShadow = true;
+      c.group.add(hand);
+    }
+    const bouquet = new THREE.Group();
+    bouquet.position.set(0.18, 0.5, 0.28);
+    const wrap = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 5), toonMat(0xfff3e0, { flatShading: true }));
+    wrap.rotation.x = Math.PI;
+    wrap.position.y = -0.04;
+    bouquet.add(wrap);
+    for (let i = 0; i < 4; i++) {
+      const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.045, 7, 5), toonMat(i % 2 ? 0xffb6d5 : 0xffe9a3, { flatShading: true }));
+      bloom.position.set(-0.055 + i * 0.037, 0.1 + (i % 2) * 0.035, 0.02);
+      bloom.castShadow = true;
+      bouquet.add(bloom);
+    }
+    c.group.add(bouquet);
+    c.swing = bouquet;
+    c.group.scale.setScalar(1.12);
+    return c;
+  }
+
+  _makeHoneyBear() {
+    const c = this._critter(0xf2c14a, 0xffedb0, 1.05);
+    for (const ex of [-0.16, 0.16]) {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), c.bodyMat);
+      ear.position.set(ex, 1.0, 0.04);
+      c.group.add(ear);
+    }
+    const apron = toonMat(0xfff6e0, { flatShading: true });
+    const bib = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.05), apron);
+    bib.position.set(0, 0.36, 0.27);
+    c.group.add(bib);
+    const honeyPot = new THREE.Group();
+    honeyPot.position.set(0.22, 0.44, 0.22);
+    const pot = makeItem('honey');
+    pot.scale.setScalar(0.72);
+    honeyPot.add(pot);
+    const spoon = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4, 5), toonMat(0x8b5e3c, { flatShading: true }));
+    spoon.position.set(-0.12, 0.2, 0.05);
+    spoon.rotation.z = -0.55;
+    honeyPot.add(spoon);
+    c.group.add(honeyPot);
+    c.swing = honeyPot;
+    c.group.scale.setScalar(1.22);
+    return c;
+  }
+
   _build(id) {
     if (id === 'acornFarm') return this._makeAxeSquirrel();
     if (id === 'bananaFarm') return this._makeCartSquirrel();
     if (id === 'fishFarm') return this._makeFisherBear();
+    if (id === 'flowerGarden') return this._makeFlowerRabbit();
+    if (id === 'honeyApiary') return this._makeHoneyBear();
     return this._makeOtters();
   }
 
@@ -230,6 +307,8 @@ export class FacilityManager {
       const p = this.island.getFacilityPos(id);
       if (p) w.group.position.set(p.x, id === 'clamFarm' ? -0.04 : 0.64, p.z);
       if (id === 'fishFarm') w.group.rotation.y = 0;
+      if (id === 'flowerGarden') w.group.rotation.y = 0;
+      if (id === 'honeyApiary') w.group.rotation.y = 0.65;
       w.home = w.group.position.clone();
       this.scene.add(w.group);
       this.workers[id] = w;
@@ -261,6 +340,19 @@ export class FacilityManager {
           child.rotation.z = Math.sin(elapsed * (0.8 + i * 0.18) + ph) * (i === 0 ? 0.08 : -0.1);
         });
       }
+    } else if (id === 'flowerGarden') {
+      const ox = Math.sin(elapsed * 0.55) * 0.42;
+      const oz = Math.sin(elapsed * 0.9 + 0.8) * 0.28;
+      const dx = ox - (w.group.position.x - w.home.x);
+      const dz = oz - (w.group.position.z - w.home.z);
+      w.group.position.x = w.home.x + ox;
+      w.group.position.z = w.home.z + oz;
+      w.group.position.y = 0.64 + Math.abs(Math.sin(elapsed * 5.2)) * 0.035;
+      if (Math.hypot(dx, dz) > 0.002) w.group.rotation.y = Math.atan2(dx, dz);
+      if (w.swing) w.swing.rotation.z = -0.15 + Math.sin(elapsed * 3.2) * 0.32;
+    } else if (id === 'honeyApiary') {
+      w.group.position.y = 0.64 + Math.sin(elapsed * 1.7) * 0.02;
+      if (w.swing) w.swing.rotation.z = Math.sin(elapsed * 2.2) * 0.12;
     }
   }
 
