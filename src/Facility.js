@@ -273,20 +273,48 @@ export class FacilityManager {
       ear.position.set(ex, 1.0, 0.04);
       c.group.add(ear);
     }
-    const apron = toonMat(0xfff6e0, { flatShading: true });
-    const bib = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.05), apron);
-    bib.position.set(0, 0.36, 0.27);
-    c.group.add(bib);
+    const hatMat = toonMat(0xe8d39b, { flatShading: true });
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 14), hatMat);
+    brim.position.set(0, 0.96, 0.04);
+    brim.castShadow = true;
+    c.group.add(brim);
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5), hatMat);
+    crown.scale.set(1, 0.72, 1);
+    crown.position.set(0, 0.98, 0.04);
+    c.group.add(crown);
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.12), toonMat(0x9c6b3f, { flatShading: true }));
+    bag.position.set(-0.26, 0.33, 0.18);
+    bag.castShadow = true;
+    c.group.add(bag);
+    const badge = new THREE.Group();
+    badge.position.set(0.08, 0.5, 0.29);
+    const beeBody = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), toonMat(0xf2c14a, { flatShading: true }));
+    beeBody.scale.set(1.25, 0.85, 0.8);
+    badge.add(beeBody);
+    const beeStripe = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.04, 0.035), toonMat(0x5b3a20, { flatShading: true }));
+    beeStripe.position.x = 0.012;
+    badge.add(beeStripe);
+    c.group.add(badge);
     const honeyPot = new THREE.Group();
     honeyPot.position.set(0.22, 0.44, 0.22);
     const pot = makeItem('honey');
     pot.scale.setScalar(0.72);
     honeyPot.add(pot);
-    const spoon = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4, 5), toonMat(0x8b5e3c, { flatShading: true }));
-    spoon.position.set(-0.12, 0.2, 0.05);
-    spoon.rotation.z = -0.55;
-    honeyPot.add(spoon);
     c.group.add(honeyPot);
+    for (const ex of [-0.27, 0.27]) {
+      const arm = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), c.bodyMat);
+      arm.scale.set(0.85, 1.05, 0.85);
+      arm.position.set(ex, 0.5, 0.17);
+      arm.castShadow = true;
+      c.group.add(arm);
+    }
+    for (const ex of [-0.13, 0.13]) {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.095, 8, 6), c.bodyMat);
+      foot.scale.set(1.1, 0.58, 1.25);
+      foot.position.set(ex, 0.08, 0.14);
+      foot.castShadow = true;
+      c.group.add(foot);
+    }
     c.swing = honeyPot;
     c.group.scale.setScalar(1.22);
     return c;
@@ -351,7 +379,14 @@ export class FacilityManager {
       if (Math.hypot(dx, dz) > 0.002) w.group.rotation.y = Math.atan2(dx, dz);
       if (w.swing) w.swing.rotation.z = -0.15 + Math.sin(elapsed * 3.2) * 0.32;
     } else if (id === 'honeyApiary') {
-      w.group.position.y = 0.64 + Math.sin(elapsed * 1.7) * 0.02;
+      const ox = Math.sin(elapsed * 0.42 + 0.8) * 0.22;
+      const oz = Math.sin(elapsed * 0.72) * 0.18;
+      const dx = ox - (w.group.position.x - w.home.x);
+      const dz = oz - (w.group.position.z - w.home.z);
+      w.group.position.x = w.home.x + ox;
+      w.group.position.z = w.home.z + oz;
+      w.group.position.y = 0.64 + Math.abs(Math.sin(elapsed * 4.4)) * 0.028;
+      if (Math.hypot(dx, dz) > 0.002) w.group.rotation.y = Math.atan2(dx, dz);
       if (w.swing) w.swing.rotation.z = Math.sin(elapsed * 2.2) * 0.12;
     }
   }

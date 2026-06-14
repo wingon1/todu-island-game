@@ -686,7 +686,7 @@ export class Island {
   _scatterFlowers(nodeSpots) {
     const colors = [0xffb6d5, 0xffe9a3, 0xb8e0f5]; // pastel pink / yellow / sky-blue
     const csz = 0.92;
-    // Keep clear of the fountain, beehive and the 2 harvestable spots.
+    // Keep clear of the apiary, beehive and the 2 harvestable spots.
     const avoid = [[-1.4, 1.3, 1.7], [-1.9, -1.5, 1.0]];
     for (const [x, z] of nodeSpots) avoid.push([x, z, 0.7]);
     let placed = 0;
@@ -727,58 +727,53 @@ export class Island {
       this._registerNode(hive, 'honey', 11, 0xf2a83a, false, false);
     }
     const apiary = new THREE.Group();
-    apiary.position.set(-2.75, this.island2GrassY, -0.45);
+    apiary.position.set(-2.25, this.island2GrassY, 2.25);
     this.island2.add(apiary);
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.16, 0.55), toonMat(0x8b5e3c, { flatShading: true }));
-    stand.position.y = 0.18;
-    stand.castShadow = true;
-    apiary.add(stand);
-    for (let i = 0; i < 2; i++) {
-      const jar = makeItem('honey');
-      jar.scale.setScalar(0.58);
-      jar.position.set(-0.2 + i * 0.36, 0.28, 0.03);
-      apiary.add(jar);
-    }
+    this.apiaryBees = [];
+    const boxMat = toonMat(0xe0a838, { flatShading: true });
+    const trimMat = toonMat(0x8b5e3c, { flatShading: true });
+    const hiveBox = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.65), boxMat);
+    hiveBox.position.y = 0.32;
+    hiveBox.castShadow = true;
+    apiary.add(hiveBox);
     for (let i = 0; i < 3; i++) {
-      const bee = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), toonMat(0xf2c14a, { flatShading: true }));
-      bee.position.set(-0.2 + i * 0.2, 0.72 + (i % 2) * 0.08, -0.35);
-      apiary.add(bee);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.05, 0.68), trimMat);
+      stripe.position.y = 0.16 + i * 0.16;
+      apiary.add(stripe);
     }
-    this._addFacilityStation(this.island2, 'honeyApiary', -2.75, this.island2GrassY, -0.45);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.09, 0.05), toonMat(0x5b3a20, { flatShading: true }));
+    slot.position.set(0, 0.32, 0.35);
+    apiary.add(slot);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.1, 0.76), trimMat);
+    roof.position.y = 0.64;
+    roof.castShadow = true;
+    apiary.add(roof);
+    for (let i = 0; i < 5; i++) {
+      const bee = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), toonMat(0xf2c14a, { flatShading: true }));
+      body.scale.set(1.25, 0.8, 0.8);
+      bee.add(body);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.055, 0.055), toonMat(0x5b3a20, { flatShading: true }));
+      stripe.position.x = 0.02;
+      bee.add(stripe);
+      const wingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65, depthWrite: false });
+      for (const sx of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.SphereGeometry(0.035, 5, 4), wingMat);
+        wing.scale.set(0.8, 0.18, 0.55);
+        wing.position.set(0, 0.035, sx * 0.04);
+        bee.add(wing);
+      }
+      bee.userData = { phase: i * 1.35, radius: 0.58 + (i % 2) * 0.22, speed: 0.8 + i * 0.08 };
+      apiary.add(bee);
+      this.apiaryBees.push(bee);
+    }
+    this._addFacilityStation(this.island2, 'honeyApiary', -0.4, this.island2GrassY, 2.95);
   }
 
   _buildFountain() {
+    // Fountain removed by design; this feature id remains as a no-op so old
+    // saves and stage unlock data stay compatible.
     this._buildIsland2();
-    const f = new THREE.Group();
-    // Placed where the pond used to be (front-left).
-    f.position.set(-1.4, this.island2GrassY, 1.3);
-    this.island2.add(f);
-    this.fountain = f;
-    // Decorative rim stones around the base.
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const stone = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5), toonMat(0xc9c0b2, { flatShading: true }));
-      stone.position.set(Math.cos(a) * 1.25, 0.02, Math.sin(a) * 1.25);
-      stone.scale.y = 0.55;
-      f.add(stone);
-    }
-    const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.2, 0.4, 16), toonMat(0xe2e9ec, { flatShading: true }));
-    basin.position.y = 0.2;
-    basin.castShadow = true;
-    f.add(basin);
-    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.1, 16), new THREE.MeshStandardMaterial({ color: 0x6fc3df, transparent: true, opacity: 0.85 }));
-    water.position.y = 0.38;
-    f.add(water);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.7, 10), toonMat(0xe2e9ec, { flatShading: true }));
-    stem.position.y = 0.72;
-    f.add(stem);
-    const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.12, 14), toonMat(0xe2e9ec, { flatShading: true }));
-    dish.position.y = 1.02;
-    f.add(dish);
-    const spout = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 8), new THREE.MeshStandardMaterial({ color: 0x9fe0f0, transparent: true, opacity: 0.7 }));
-    spout.position.y = 1.4;
-    this.fountain.userData.spout = spout;
-    f.add(spout);
   }
 
   // Stage 5: a cobbled stone walkway (rounded stepping-stone tiles).
@@ -793,7 +788,7 @@ export class Island {
     for (let z = 4.6; z >= 1.0; z -= 1.15) mainPts.push([Math.sin(z * 0.7) * 0.45, z]);
     this._layStones(this._stonePathGroup, mainPts, 0.72, matA, matB);
 
-    // Second island: a couple of stones leading in to the fountain.
+    // Second island: a couple of stones leading in to the apiary.
     if (this.island2) {
       const ip = [];
       for (let z = 3.3; z >= 1.4; z -= 1.0) ip.push([-1.4 + (z - 1.4) * 0.15, z]);
@@ -1004,7 +999,7 @@ export class Island {
   getObstacles() {
     const obs = [];
     for (const s of this._treeSpots || []) obs.push({ x: s[0], z: s[1], r: 1.05 });
-    // Fountain on the second island (Stage 5).
+    // Legacy fountain obstacle (currently disabled by design).
     if (this.fountain && this.island2) {
       obs.push({
         x: this.island2.position.x + this.fountain.position.x,
@@ -1115,6 +1110,15 @@ export class Island {
       cover.position.y = Math.sin(elapsed * 0.75 + ph) * 0.035;
       cover.rotation.y = Math.sin(elapsed * 0.18 + ph) * 0.025;
     }
+    if (this.apiaryBees) {
+      for (const bee of this.apiaryBees) {
+        const ph = bee.userData.phase || 0;
+        const r = bee.userData.radius || 0.6;
+        const t = elapsed * (bee.userData.speed || 0.9) + ph;
+        bee.position.set(Math.cos(t) * r, 0.72 + Math.sin(t * 1.7) * 0.12, Math.sin(t) * r * 0.65);
+        bee.rotation.y = -t + Math.PI / 2;
+      }
+    }
 
     // Harvest timers.
     for (const n of this.nodes) {
@@ -1205,6 +1209,7 @@ export class Island {
     }
     this.facilityStations = {};
     this.fountain = null;
+    this.apiaryBees = [];
     this._enabledFeatures.clear();
     this._buildCloudCovers();
   }
