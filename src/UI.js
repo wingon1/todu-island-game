@@ -1,6 +1,6 @@
 // UI.js — top HUD (coins + inventory as item icons), bottom button panel,
 // and the victory overlay. Pure DOM; reads from GameState.
-import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE, FACILITIES } from './GameState.js';
+import { gameState, ALBA_TYPES, ALBA_INFO, TEST_MODE, FACILITIES, STAGES } from './GameState.js';
 
 // --- Recognizable 2D item icons (match the 3D models) ----------------------
 export function coinIconSVG() {
@@ -138,6 +138,12 @@ export class UI {
     this.upgradeBtn = document.getElementById('upgrade-btn');
     this.upgradeCostEl = document.getElementById('upgrade-cost');
     this.stockBtn = document.getElementById('stock-btn');
+    this.shopBtn = document.getElementById('shop-btn');
+    this.shopPopup = document.getElementById('shop-popup');
+    this.shopClose = document.getElementById('shop-close');
+    this.shopList = document.getElementById('shop-list');
+    this.shopTabs = [...document.querySelectorAll('.shop-tab')];
+    this.shopTab = 'store';
 
     this.victoryEl = document.getElementById('victory');
     this.vCoins = document.getElementById('v-coins');
@@ -151,6 +157,8 @@ export class UI {
     this._chipEls = {};
     this._lastCoins = -1;
     this._lastInv = {};
+    this._shopOpen = false;
+    this._shopSnapshot = '';
 
     this._bindButton(this.upgradeBtn, () => {
       this.audio?.uiTap();
@@ -160,11 +168,46 @@ export class UI {
       this.audio?.uiTap();
       this.onStock();
     });
+    this._bindButton(this.shopBtn, () => {
+      this.audio?.uiTap();
+      this.openShop();
+    });
     this._bindButton(this.replayBtn, () => {
       this.audio?.uiTap();
       this.hideVictory();
       this.onReplay();
     });
+
+    if (this.shopClose) {
+      this._bindButton(this.shopClose, () => {
+        this.audio?.uiTap();
+        this.closeShop();
+      });
+    }
+    if (this.shopPopup) {
+      this.shopPopup.addEventListener('mouseup', (e) => {
+        if (e.target === this.shopPopup) this.closeShop();
+      });
+      this.shopPopup.addEventListener('touchend', (e) => {
+        if (e.target === this.shopPopup) {
+          e.preventDefault();
+          this.closeShop();
+        }
+      });
+    }
+    for (const tab of this.shopTabs) {
+      this._bindButton(tab, () => {
+        this.audio?.uiTap();
+        this.openShop(tab.dataset.tab || 'store');
+      });
+    }
+    if (this.shopList) {
+      this.shopList.addEventListener('mouseup', (e) => this._handleShopAction(e));
+      this.shopList.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this._handleShopAction(e);
+      });
+    }
     this._bindButton(this.startBtn, () => {
       this.onStart();
       this.startGate.style.display = 'none';
@@ -316,6 +359,7 @@ export class UI {
       this.upgradeBtn.disabled = !can;
       this.upgradeBtn.classList.toggle('affordable', can);
     }
+    this._updateShopBadge();
 
     // Stock button: show only when inventory has sellable items & a free slot.
     const hasStockable =
@@ -342,40 +386,178 @@ export class UI {
     }
 
     // Keep the facility popup's hire button live with the coin balance.
-    if (this._facilityId) this.refreshFacility(this._facilityId);
+    if (this._shopOpen) this.renderShop(false);
+  }
+
+  _updateShopBadge() {
+    if (!this.shopBtn) return;
+    const hasAffordableUpgrade = gameState.canUpgrade();
+    const hasAffordableAlba = ALBA_TYPES.some((type) => gameState.canHireAlba(type));
+    const hasAffordableFacility = Object.keys(FACILITIES).some((id) => gameState.stage >= 5 && gameState.canHireFacility(id));
+    this.shopBtn.classList.toggle('has-buy', hasAffordableUpgrade || hasAffordableAlba || hasAffordableFacility);
+  }
+
+  openShop(tab = this.shopTab || 'store', focusId = null) {
+    this.shopTab = tab;
+    this._facilityId = focusId || null;
+    this._shopOpen = true;
+    this._shopSnapshot = '';
+    if (this.shopPopup) this.shopPopup.classList.add('show');
+    this.renderShop();
+  }
+
+  closeShop() {
+    this._shopOpen = false;
+    this._facilityId = null;
+    this._shopSnapshot = '';
+    if (this.shopPopup) this.shopPopup.classList.remove('show');
+  }
+
+  _handleShopAction(e) {
+    const btn = e.target.closest?.('[data-action]');
+    if (!btn || btn.disabled) return;
+    this.audio?.uiTap();
+    const action = btn.dataset.action;
+    const beforeStage = gameState.stage;
+    if (action === 'upgrade') this.onUpgrade();
+    if (action === 'hire-alba') this.onHire && this.onHire(btn.dataset.type);
+    if (action === 'hire-facility') this.onFacilityHire && this.onFacilityHire(btn.dataset.id);
+    if (action === 'upgrade' && gameState.stage !== beforeStage) {
+      this.closeShop();
+      return;
+    }
+    this.renderShop(true);
+  }
+
+  renderShop(force = true) {
+    if (!this.shopList) return;
+    const snapshot = JSON.stringify({
+      tab: this.shopTab,
+      stage: gameState.stage,
+      coins: gameState.coins,
+      alba: gameState.alba,
+      facilities: gameState.facilities,
+    });
+    if (!force && snapshot === this._shopSnapshot) return;
+    this._shopSnapshot = snapshot;
+    for (const tab of this.shopTabs) tab.classList.toggle('active', tab.dataset.tab === this.shopTab);
+    if (this.shopTab === 'alba') this.shopList.innerHTML = this._albaCards();
+    else if (this.shopTab === 'facility') this.shopList.innerHTML = this._facilityCards();
+    else this.shopList.innerHTML = this._storeCards();
+  }
+
+  _costText(cost, can, maxText = 'MAX') {
+    if (cost === null) return maxText;
+    if (can) return `${cost}`;
+    return `${Math.max(0, cost - gameState.coins)} 부족`;
+  }
+
+  _card({ icon = '', title, desc, button, disabled = false, action = '', attrs = '', affordable = false }) {
+    return `
+      <div class="shop-card ${disabled ? 'locked' : ''}">
+        <div class="shop-card-icon">${icon}</div>
+        <div>
+          <div class="shop-card-title">${title}</div>
+          <div class="shop-card-desc">${desc}</div>
+        </div>
+        <button class="shop-buy ${affordable ? 'affordable' : ''}" data-action="${action}" ${attrs} ${disabled ? 'disabled' : ''}>${button}</button>
+      </div>
+    `;
+  }
+
+  _storeIcon() {
+    return `<span class="shop-icon" style="transform:scale(.92);"></span>`;
+  }
+
+  _storeCards() {
+    const cost = gameState.config.upgradeCost;
+    const can = gameState.canUpgrade();
+    if (cost === null) {
+      return this._card({
+        icon: this._storeIcon(),
+        title: '가게 확장 완료',
+        desc: `현재 ${gameState.config.name.replace('\n', ' ')} · 선반 ${gameState.shelfCapacity}칸`,
+        button: 'MAX',
+        disabled: true,
+      });
+    }
+    const next = STAGES[gameState.stage + 1];
+    return this._card({
+      icon: this._storeIcon(),
+      title: `${next.name.replace('\n', ' ')}로 확장`,
+      desc: `새 자원과 손님이 열려요 · 선반 ${next.shelfSlots}칸`,
+      button: can ? `${cost}` : `${cost - gameState.coins} 부족`,
+      action: 'upgrade',
+      affordable: can,
+      disabled: !can,
+    });
+  }
+
+  _albaCards() {
+    return ALBA_TYPES.map((type) => {
+      const info = ALBA_INFO[type];
+      const lvl = gameState.albaLevel(type);
+      const cost = gameState.albaCost(type);
+      const can = gameState.canHireAlba(type);
+      const max = cost === null || lvl >= info.maxLevel;
+      let desc = `Lv${lvl} · `;
+      if (type === 'harvester') {
+        const next = Math.min(lvl + 1, info.maxLevel);
+        desc += max ? '모든 수확 도움 완료' : `다음: ${HARVESTER_UNLOCK_TEXT[next] || '강화'}`;
+      } else {
+        desc += max ? '선반을 골고루 자동 진열해요' : '선반을 골고루 채워줘요';
+      }
+      return this._card({
+        icon: type === 'harvester' ? itemIconSVG('acorn') : itemIconSVG('banana'),
+        title: info.kr,
+        desc,
+        button: max ? 'MAX' : this._costText(cost, can),
+        action: 'hire-alba',
+        attrs: `data-type="${type}"`,
+        affordable: can,
+        disabled: max || !can,
+      });
+    }).join('');
+  }
+
+  _facilityCards() {
+    const locked = gameState.stage < 5;
+    return Object.keys(FACILITIES).map((id) => {
+      const f = FACILITIES[id];
+      const lvl = gameState.facilityLevel(id);
+      const rate = gameState.facilityRate(id);
+      const cost = gameState.facilityCost(id);
+      const can = !locked && gameState.canHireFacility(id);
+      const max = cost === null;
+      const verb = lvl === 0 ? '고용' : '레벨업';
+      const desc = locked
+        ? '스테이지 5에서 생산터가 열려요'
+        : `Lv${lvl} · ${rate.toFixed(1)}/초 생산`;
+      return this._card({
+        icon: itemIconSVG(f.item),
+        title: f.kr,
+        desc,
+        button: locked ? '잠김' : max ? 'MAX' : `${verb} ${this._costText(cost, can)}`,
+        action: 'hire-facility',
+        attrs: `data-id="${id}"`,
+        affordable: can,
+        disabled: locked || max || !can,
+      });
+    }).join('');
   }
 
   // --- Facility popup ----------------------------------------------------
   openFacility(id) {
-    if (!this.fp.popup || !FACILITIES[id]) return;
-    this._facilityId = id;
-    this.fp.icon.innerHTML = itemIconSVG(FACILITIES[id].item);
-    this.fp.title.textContent = FACILITIES[id].kr;
-    this.fp.popup.classList.add('show');
-    this.refreshFacility(id);
+    if (!FACILITIES[id]) return;
+    this.openShop('facility', id);
   }
 
   closeFacility() {
-    this._facilityId = null;
-    if (this.fp.popup) this.fp.popup.classList.remove('show');
+    this.closeShop();
   }
 
   refreshFacility(id) {
-    if (!this._facilityId || this._facilityId !== id) return;
-    const lvl = gameState.facilityLevel(id);
-    const rate = gameState.facilityRate(id).toFixed(1);
-    const cost = gameState.facilityCost(id);
-    this.fp.stat.textContent = `Lv${lvl} · ${rate}/초`;
-    if (cost === null) {
-      this.fp.hire.textContent = 'MAX';
-      this.fp.hire.disabled = true;
-      this.fp.hire.classList.remove('affordable');
-    } else {
-      this.fp.hire.textContent = `${lvl === 0 ? '고용' : '레벨업'} · ${cost}`;
-      const can = gameState.canHireFacility(id);
-      this.fp.hire.disabled = !can;
-      this.fp.hire.classList.toggle('affordable', can);
-    }
+    if (this._shopOpen && this.shopTab === 'facility') this.renderShop();
   }
 
   showVictory() {

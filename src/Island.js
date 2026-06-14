@@ -777,14 +777,76 @@ export class Island {
     // Bridge to the main island (main bottom edge ~ z +7).
     this.lowerBridge = this._buildZBridge(0, 7.2, 12.6);
 
-    // Left: fish farm — a little boat floating on the water.
-    const boat = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.4, 0.4, 8, 1, false, 0, Math.PI), toonMat(0xb5793c, { flatShading: true }));
-    boat.rotation.z = Math.PI;
-    boat.rotation.y = Math.PI / 2;
-    boat.position.set(-4.6, 0.35, 0.2);
-    boat.scale.set(1, 1, 1.8);
+    // Left: fish farm — a very simple inverted-triangle boat silhouette.
+    const boat = new THREE.Group();
+    boat.position.set(-2.25, 0.18, 5.55);
+    boat.rotation.y = 0.12;
     g.add(boat);
-    this._addFacilityStation(g, 'fishFarm', -4.6, 0.5, 0.2);
+    const hullMat = toonMat(0xb5793c, { flatShading: true });
+    const trimMat = toonMat(0x8b5e3c, { flatShading: true });
+
+    const hullShape = new THREE.Shape();
+    hullShape.moveTo(-1.15, 0.36);
+    hullShape.lineTo(1.15, 0.36);
+    hullShape.lineTo(0.72, -0.18);
+    hullShape.lineTo(-0.72, -0.18);
+    hullShape.lineTo(-1.15, 0.36);
+    const hullGeo = new THREE.ExtrudeGeometry(hullShape, {
+      depth: 0.58,
+      bevelEnabled: false,
+    });
+    hullGeo.center();
+    hullGeo.rotateX(-Math.PI / 2);
+    const hull = new THREE.Mesh(hullGeo, hullMat);
+    hull.position.y = 0.26;
+    hull.castShadow = true;
+    boat.add(hull);
+
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.08, 0.62), trimMat);
+    rim.position.y = 0.52;
+    rim.castShadow = true;
+    boat.add(rim);
+
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.48), toonMat(0xc49a6c, { flatShading: true }));
+    seat.position.y = 0.62;
+    seat.castShadow = true;
+    boat.add(seat);
+
+    // Worker stands on the lower/front island edge, facing down toward the
+    // water so the bear's face stays visible from the isometric camera.
+    this._addFacilityStation(g, 'fishFarm', -1.55, gy, 2.1);
+    const fishBox = new THREE.Group();
+    fishBox.position.set(-0.25, gy, 2.32);
+    fishBox.rotation.y = -0.25;
+    g.add(fishBox);
+    const crateMat = toonMat(0xc49a6c, { flatShading: true });
+    const crateDark = toonMat(0x8b5e3c, { flatShading: true });
+    const crateBase = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.32, 0.52), crateMat);
+    crateBase.position.y = 0.16;
+    crateBase.castShadow = true;
+    fishBox.add(crateBase);
+    for (const z of [-0.29, 0.29]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.09, 0.05), crateDark);
+      rail.position.set(0, 0.36, z);
+      rail.castShadow = true;
+      fishBox.add(rail);
+    }
+    for (const x of [-0.38, 0.38]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.52), crateDark);
+      rail.position.set(x, 0.36, 0);
+      rail.castShadow = true;
+      fishBox.add(rail);
+    }
+    const fishPileMat = toonMat(0x6fc3df, { flatShading: true });
+    const fishPileDark = toonMat(0x4aa0cf, { flatShading: true });
+    for (let i = 0; i < 7; i++) {
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(0.12, 7, 5), i % 2 ? fishPileMat : fishPileDark);
+      lump.scale.set(1.45, 0.42, 0.62);
+      lump.position.set(-0.24 + (i % 4) * 0.16, 0.46 + Math.floor(i / 4) * 0.05, -0.13 + (i % 3) * 0.12);
+      lump.rotation.y = (i % 2 ? -0.5 : 0.45);
+      lump.castShadow = true;
+      fishBox.add(lump);
+    }
 
     // Right: clam harvesting — otters float on the water (built by FacilityMgr).
     this._addFacilityStation(g, 'clamFarm', 4.6, 0.4, 0.2);

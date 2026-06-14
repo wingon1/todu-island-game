@@ -162,10 +162,8 @@ GitHub Pages 배포용 workflow가 포함되어 있습니다.
 
 - 저장 위치: 브라우저 `localStorage`
 - 저장 키: `cozy-island-tycoon-save-v1`
-- 저장 대상: 스테이지, 코인, 인벤토리, 선반, 누적 코인, 손님 수, 알바 레벨, 경과 시간
+- 저장 대상: 스테이지, 코인, 인벤토리, 선반, 누적 코인, 손님 수, 알바 레벨, 시설 레벨, 경과 시간
 - 페이지 숨김/종료 시점과 주기적 자동 저장을 함께 사용
-
-현재 시설 레벨은 `GameState`에 존재하지만 저장 데이터에는 아직 포함되어 있지 않습니다. 시설 진행도까지 영구 저장하려면 `GameState.save()`와 `GameState.load()`에 `facilities` 항목을 추가하면 됩니다.
 
 ## 테스트 모드
 
@@ -233,7 +231,6 @@ export const TEST_MODE = true;
 
 ## 현재 남은 정리 후보
 
-- 시설 레벨의 localStorage 저장/불러오기 추가
 - 테스트 모드 기본값을 배포 전 `false`로 변경
 - GitHub Actions의 Node 버전 경고 대응
 - 스테이지 6 이후 확장 시 `STAGES`, `FEATURE_BUILDERS`, `Store` builder를 같은 패턴으로 추가

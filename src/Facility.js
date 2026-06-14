@@ -133,17 +133,40 @@ export class FacilityManager {
     crown.scale.set(1, 0.8, 1);
     crown.position.set(0, 0.99, 0.04);
     c.group.add(crown);
-    // fishing rod (pivot for nodding)
+    // Fishing rod: held forward; the whole bear is rotated toward the sea at
+    // placement time, so this points out over the water.
     const rod = new THREE.Group();
-    rod.position.set(0.22, 0.55, 0.2);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.95, 6), toonMat(0x6b4f1a, { flatShading: true }));
-    pole.position.set(0, 0.3, 0.25);
-    pole.rotation.x = -0.7;
+    rod.position.set(0.18, 0.58, 0.18);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 1.05, 6), toonMat(0x6b4f1a, { flatShading: true }));
+    pole.position.set(0, 0.26, 0.48);
+    pole.rotation.x = 1.02;
     rod.add(pole);
-    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.7, 4), toonMat(0xeeeeee, {}));
-    line.position.set(0, 0.2, 0.7);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.025, 5, 4), toonMat(0x6b4f1a, { flatShading: true }));
+    tip.position.set(0, 0.5, 0.93);
+    rod.add(tip);
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.55, 4), toonMat(0xeeeeee, {}));
+    line.position.set(0, 0.18, 0.98);
     rod.add(line);
+    const bobber = new THREE.Mesh(new THREE.SphereGeometry(0.055, 7, 5), toonMat(0xff6f61, { flatShading: true }));
+    bobber.position.set(0, -0.12, 1.0);
+    rod.add(bobber);
     c.group.add(rod);
+
+    // Small round limbs so the fisher reads as a cute bear.
+    for (const ex of [-0.27, 0.27]) {
+      const arm = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), c.bodyMat);
+      arm.scale.set(0.78, 1.15, 0.82);
+      arm.position.set(ex, 0.52, 0.16);
+      arm.castShadow = true;
+      c.group.add(arm);
+    }
+    for (const ex of [-0.13, 0.13]) {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.095, 8, 6), c.bodyMat);
+      foot.scale.set(1.1, 0.58, 1.25);
+      foot.position.set(ex, 0.08, 0.14);
+      foot.castShadow = true;
+      c.group.add(foot);
+    }
     c.group.scale.setScalar(1.35);
     c.swing = rod;
     return c;
@@ -179,7 +202,8 @@ export class FacilityManager {
     if (!this.workers[id]) {
       const w = this._build(id);
       const p = this.island.getFacilityPos(id);
-      if (p) w.group.position.set(p.x, id === 'clamFarm' || id === 'fishFarm' ? 0.2 : 0.64, p.z);
+      if (p) w.group.position.set(p.x, id === 'clamFarm' ? 0.2 : 0.64, p.z);
+      if (id === 'fishFarm') w.group.rotation.y = 0;
       w.home = w.group.position.clone();
       this.scene.add(w.group);
       this.workers[id] = w;
@@ -199,7 +223,7 @@ export class FacilityManager {
       w.group.rotation.y = Math.cos(elapsed * 0.8) >= 0 ? Math.PI / 2 : -Math.PI / 2;
       w.group.position.y = 0.64 + Math.abs(Math.sin(elapsed * 6)) * 0.04;
     } else if (id === 'fishFarm') {
-      w.group.position.y = 0.2 + Math.sin(elapsed * 1.5) * 0.04; // bob on the boat
+      w.group.position.y = 0.64 + Math.sin(elapsed * 1.5) * 0.025; // standing on the island edge
       if (w.swing) w.swing.rotation.x = Math.sin(elapsed * 2) * 0.25;
     } else if (id === 'clamFarm') {
       w.group.position.y = 0.18 + Math.sin(elapsed * 1.3) * 0.05; // float

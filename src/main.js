@@ -102,7 +102,7 @@ const panVel = new THREE.Vector2(0, 0); // world (x,z) glide per frame
 
 let viewAspect = 1;
 function computeAspect() {
-  return window.innerWidth / (window.innerHeight * 0.79);
+  return window.innerWidth / (window.innerHeight * 0.83);
 }
 function setProjection() {
   const halfW = view;
@@ -115,8 +115,8 @@ function setProjection() {
 }
 function onResize() {
   viewAspect = computeAspect();
-  renderer.setSize(window.innerWidth, window.innerHeight * 0.79, false);
-  canvasWrap.style.height = '79%';
+  renderer.setSize(window.innerWidth, window.innerHeight * 0.83, false);
+  canvasWrap.style.height = '83%';
   setProjection();
 }
 window.addEventListener('resize', onResize);

@@ -290,6 +290,7 @@ export class GameState {
         elapsed: this.elapsedSeconds(),
         finalSaleDone: this.finalSaleDone,
         alba: this.alba,
+        facilities: this.facilities,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -313,6 +314,7 @@ export class GameState {
       this.customersServed = d.customersServed || 0;
       this.finalSaleDone = !!d.finalSaleDone;
       this.alba = Object.assign(Object.fromEntries(ALBA_TYPES.map((t) => [t, 0])), d.alba || {});
+      this.facilities = Object.assign(Object.fromEntries(FACILITY_IDS.map((id) => [id, 0])), d.facilities || {});
       this.startTime = performance.now() - (d.elapsed || 0) * 1000;
       return true;
     } catch (e) {
