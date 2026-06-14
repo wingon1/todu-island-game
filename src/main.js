@@ -2,7 +2,7 @@
 // lighting, the game loop, resize handling, tap raycasting, and wires all
 // systems together.
 import * as THREE from 'three';
-import { gameState, FINAL_STAGE } from './GameState.js';
+import { gameState, FINAL_STAGE, STAGES } from './GameState.js';
 import { audio } from './Audio.js';
 import { Particles } from './Particles.js';
 import { Island } from './Island.js';
@@ -78,44 +78,93 @@ scene.fog = new THREE.Fog(0xbfe9f5, 55, 120);
 // Orthographic diorama camera at a classic isometric angle.
 // ---------------------------------------------------------------------------
 const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
-// Position so we look down at 45° azimuth / 35.26° elevation (classic iso).
+// Classic iso angle (45° azimuth / 35.26° elevation), kept FIXED. The camera
+// freely pans/zooms over the map: we move a ground look-target + a zoom value,
+// keeping a constant offset so the angle never changes.
 const camDist = 18;
-const camBase = new THREE.Vector3(camDist, camDist * 0.82, camDist);
-camera.position.copy(camBase);
-camera.lookAt(0, 0.6, 0);
+const camOffH = camDist * 0.82; // camera height (constant)
 
-let zoomFactor = 1; // for snap-zoom on upgrade
-let targetZoom = 1;
+// Free-camera state ---------------------------------------------------------
+const camTarget = new THREE.Vector3(gameState.config.viewShift || 0, 0.6, 0);
+let view = gameState.config.viewW || 9.5; // ortho half-width (zoom control)
+const VIEW_MIN = 5;
+const VIEW_MAX = 18;
+// How far the look-target may roam (covers both islands + a margin).
+const BOUND = { minX: -7, maxX: 20, minZ: -8, maxZ: 8 };
+let breatheT = 0;
 
-// Per-stage framing — driven by STAGES[stage].viewW / viewShift so a new stage
-// only needs config (no camera code changes). Values lerp on stage change.
-const FRUSTUM_HALF_H = 9.0;
-let frustumHalfW = gameState.config.viewW; // current (animated)
-let viewShiftX = gameState.config.viewShift; // current pan along +x
-let targetFrustumW = frustumHalfW;
-let targetShiftX = viewShiftX;
+// Smooth focus animation (on stage change) and pan inertia.
+let focusing = false;
+const focusPos = new THREE.Vector3();
+let focusView = view;
+const panVel = new THREE.Vector2(0, 0); // world (x,z) glide per frame
 
-function updateFrustum() {
-  const w = window.innerWidth;
-  const h = window.innerHeight * 0.79; // top 79% (canvas)
-  const aspect = w / h;
-
-  let halfH = Math.max(FRUSTUM_HALF_H, frustumHalfW / aspect);
-  halfH *= zoomFactor;
-  const halfW = halfH * aspect;
-
+let viewAspect = 1;
+function computeAspect() {
+  return window.innerWidth / (window.innerHeight * 0.79);
+}
+function setProjection() {
+  const halfW = view;
+  const halfH = view / viewAspect;
   camera.left = -halfW;
   camera.right = halfW;
   camera.top = halfH;
   camera.bottom = -halfH;
   camera.updateProjectionMatrix();
-
-  renderer.setSize(w, h, false);
+}
+function onResize() {
+  viewAspect = computeAspect();
+  renderer.setSize(window.innerWidth, window.innerHeight * 0.79, false);
   canvasWrap.style.height = '79%';
+  setProjection();
+}
+window.addEventListener('resize', onResize);
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+// Place the camera from the current target + zoom (call every frame).
+function applyCamera() {
+  view = clamp(view, VIEW_MIN, VIEW_MAX);
+  camTarget.x = clamp(camTarget.x, BOUND.minX, BOUND.maxX);
+  camTarget.z = clamp(camTarget.z, BOUND.minZ, BOUND.maxZ);
+  camera.position.set(
+    camTarget.x + camDist,
+    camOffH + Math.sin(breatheT) * 0.03,
+    camTarget.z + camDist
+  );
+  camera.lookAt(camTarget.x, 0.6, camTarget.z);
+  setProjection();
 }
 
-window.addEventListener('resize', updateFrustum);
-updateFrustum();
+// Snap the camera straight to a stage's framing (load / replay).
+function setCameraToStage() {
+  camTarget.set(gameState.config.viewShift || 0, 0.6, 0);
+  view = gameState.config.viewW || 9.5;
+  focusing = false;
+  panVel.set(0, 0);
+}
+
+// Begin a smooth focus toward a stage's framing (on upgrade).
+function focusOn(stage) {
+  const cfg = STAGES[stage] || gameState.config;
+  focusPos.set(cfg.viewShift || 0, 0.6, 0);
+  focusView = cfg.viewW || 9.5;
+  focusing = true;
+}
+
+// Project a screen point to the ground plane (y = 0.6).
+const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.6);
+const _ndc = new THREE.Vector2();
+const _hit = new THREE.Vector3();
+function groundAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  _ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+  raycaster.setFromCamera(_ndc, camera);
+  return raycaster.ray.intersectPlane(_groundPlane, _hit) ? _hit.clone() : null;
+}
+
+onResize();
+applyCamera();
 
 // ---------------------------------------------------------------------------
 // Lighting — one shadow-casting sun + soft fill.
@@ -184,11 +233,8 @@ function restoreWorldFromState() {
   store.build(gameState.stage);
   workers.reset();
   animals.reset();
-  frustumHalfW = gameState.config.viewW;
-  viewShiftX = gameState.config.viewShift;
-  targetFrustumW = frustumHalfW;
-  targetShiftX = viewShiftX;
-  updateFrustum();
+  setCameraToStage();
+  applyCamera();
 }
 
 restoreWorldFromState();
@@ -230,24 +276,119 @@ function handleTap(clientX, clientY) {
   }
 }
 
-// Pointer bindings (touch + mouse for desktop debugging).
-let touchHandled = false;
-canvas.addEventListener(
-  'touchstart',
-  (e) => {
-    touchHandled = true;
-    const t = e.changedTouches[0];
-    handleTap(t.clientX, t.clientY);
-  },
-  { passive: true }
-);
-canvas.addEventListener('mousedown', (e) => {
-  if (touchHandled) {
-    touchHandled = false;
+// ---------------------------------------------------------------------------
+// Camera input: drag to pan (with inertia), pinch / wheel to zoom, short tap
+// harvests. One finger = pan; two fingers = pinch-zoom.
+// ---------------------------------------------------------------------------
+canvas.style.touchAction = 'none';
+const pointers = new Map(); // id -> {x, y}
+let dragGrab = null; // world ground point under the finger
+let dragMoved = false;
+let dragStart = null;
+let pinchPrevDist = 0;
+const DRAG_THRESHOLD = 8; // px before a press becomes a drag (vs a tap)
+
+function twoPointerInfo() {
+  const [a, b] = [...pointers.values()];
+  return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  focusing = false;
+  panVel.set(0, 0);
+  if (pointers.size === 1) {
+    dragMoved = false;
+    dragStart = { x: e.clientX, y: e.clientY };
+    applyCamera();
+    dragGrab = groundAt(e.clientX, e.clientY);
+  } else if (pointers.size === 2) {
+    dragGrab = null; // stop panning, start pinch
+    pinchPrevDist = twoPointerInfo().dist;
+  }
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size >= 2) {
+    const info = twoPointerInfo();
+    if (pinchPrevDist > 0 && info.dist > 0) {
+      applyCamera();
+      const before = groundAt(info.mx, info.my);
+      view = clamp(view * (pinchPrevDist / info.dist), VIEW_MIN, VIEW_MAX);
+      applyCamera();
+      const after = groundAt(info.mx, info.my);
+      if (before && after) {
+        camTarget.x += before.x - after.x;
+        camTarget.z += before.z - after.z;
+      }
+    }
+    pinchPrevDist = info.dist;
     return;
   }
-  handleTap(e.clientX, e.clientY);
+
+  if (dragGrab) {
+    if (!dragMoved && Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) > DRAG_THRESHOLD) {
+      dragMoved = true;
+    }
+    if (dragMoved) {
+      applyCamera();
+      const cur = groundAt(e.clientX, e.clientY);
+      if (cur) {
+        const dx = dragGrab.x - cur.x;
+        const dz = dragGrab.z - cur.z;
+        camTarget.x += dx;
+        camTarget.z += dz;
+        panVel.set(dx, dz); // remember last move for inertia
+      }
+    }
+  }
 });
+
+function endPointer(e) {
+  if (!pointers.has(e.pointerId)) return;
+  const wasSingle = pointers.size === 1;
+  pointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+  if (wasSingle) {
+    if (!dragMoved) handleTap(e.clientX, e.clientY); // a tap -> harvest
+    // else: keep panVel for inertia glide
+    dragGrab = null;
+  } else if (pointers.size === 1) {
+    // Lifted one finger of a pinch — resume panning with the remaining one.
+    const [p] = [...pointers.values()];
+    applyCamera();
+    dragGrab = groundAt(p.x, p.y);
+    dragMoved = true;
+    dragStart = { x: p.x, y: p.y };
+    pinchPrevDist = 0;
+  }
+  if (pointers.size === 0) pinchPrevDist = 0;
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    focusing = false;
+    applyCamera();
+    const before = groundAt(e.clientX, e.clientY);
+    view = clamp(view * Math.exp(e.deltaY * 0.0012), VIEW_MIN, VIEW_MAX);
+    applyCamera();
+    const after = groundAt(e.clientX, e.clientY);
+    if (before && after) {
+      camTarget.x += before.x - after.x;
+      camTarget.z += before.z - after.z;
+    }
+  },
+  { passive: false }
+);
 
 // ---------------------------------------------------------------------------
 // Harvest flight: a DOM dot flies along a quadratic Bézier to the inventory.
@@ -336,26 +477,18 @@ function doUpgrade() {
   const newStage = gameState.stage + 1;
   if (!gameState.upgrade()) return;
 
-  // Cloud puff + sound + snap zoom.
+  // Cloud puff + sound.
   const p = store.getCoinSpawnPosition();
   particles.burstPuff(p, 14, 0xffffff);
   audio.stageUpgrade();
-  targetZoom = 0.9;
-  zoomSnapTimer = 0;
 
   // Rebuild store mesh for the new tier (disposes old meshes).
   store.build(newStage);
   // Enable whatever this stage unlocks (data-driven; see STAGES.unlocks).
   island.applyUnlocks(newStage);
-  // Retarget the camera zoom/pan for the new stage.
-  applyStageCamera();
+  // Smoothly focus the camera on the new stage's area (then free to roam).
+  focusOn(newStage);
   scheduleSave();
-}
-
-// Read the current stage's framing config; the loop lerps toward it.
-function applyStageCamera() {
-  targetFrustumW = gameState.config.viewW;
-  targetShiftX = gameState.config.viewShift;
 }
 
 function doHire(type) {
@@ -400,14 +533,8 @@ function doReplay() {
   ui._lastInv = {};
   gameOver = false;
   paused = false;
-  zoomFactor = 1;
-  targetZoom = 1;
-  // Back to the starting stage's framing.
-  frustumHalfW = gameState.config.viewW;
-  viewShiftX = gameState.config.viewShift;
-  targetFrustumW = frustumHalfW;
-  targetShiftX = viewShiftX;
-  updateFrustum();
+  setCameraToStage();
+  applyCamera();
   gameState.startTime = performance.now();
   gameState.clearSave();
   scheduleSave();
@@ -416,7 +543,6 @@ function doReplay() {
 // ---------------------------------------------------------------------------
 // Main loop.
 // ---------------------------------------------------------------------------
-let zoomSnapTimer = 999;
 const clock = new THREE.Clock();
 let elapsed = 0;
 
@@ -425,32 +551,21 @@ function animate() {
   const dt = Math.min(0.05, clock.getDelta());
   elapsed += dt;
 
-  // Per-stage camera zoom (frustum) + pan (toward the second island) easing.
-  let frustumChanged = false;
-  if (Math.abs(frustumHalfW - targetFrustumW) > 0.002) {
-    frustumHalfW += (targetFrustumW - frustumHalfW) * Math.min(1, dt * 2.5);
-    frustumChanged = true;
+  // --- Free camera: inertia glide + smooth stage focus, then place it. ---
+  breatheT += dt * ((Math.PI * 2) / 4);
+  if (pointers.size === 0 && (Math.abs(panVel.x) > 1e-4 || Math.abs(panVel.y) > 1e-4)) {
+    camTarget.x += panVel.x;
+    camTarget.z += panVel.y;
+    panVel.multiplyScalar(0.9); // friction
   }
-  if (Math.abs(viewShiftX - targetShiftX) > 0.002) {
-    viewShiftX += (targetShiftX - viewShiftX) * Math.min(1, dt * 2.5);
+  if (focusing) {
+    const k = Math.min(1, dt * 3);
+    camTarget.x += (focusPos.x - camTarget.x) * k;
+    camTarget.z += (focusPos.z - camTarget.z) * k;
+    view += (focusView - view) * k;
+    if (Math.abs(focusPos.x - camTarget.x) < 0.05 && Math.abs(view - focusView) < 0.05) focusing = false;
   }
-
-  // Camera breathe (slow sine on y) + pan along +x toward the active area.
-  camera.position.x = camBase.x + viewShiftX;
-  camera.position.y = camBase.y + Math.sin((elapsed / 4) * Math.PI * 2) * 0.03;
-  camera.position.z = camBase.z;
-  camera.lookAt(viewShiftX, 0.6, 0);
-
-  // Snap-zoom easing.
-  if (targetZoom !== 1) {
-    zoomSnapTimer += dt;
-    if (zoomSnapTimer > 0.12) targetZoom = 1; // begin easing back after the punch
-  }
-  if (Math.abs(zoomFactor - targetZoom) > 0.001) {
-    zoomFactor += (targetZoom - zoomFactor) * Math.min(1, dt * 8);
-    frustumChanged = true;
-  }
-  if (frustumChanged) updateFrustum();
+  applyCamera();
 
   if (!paused && !gameOver) {
     island.update(dt, elapsed);
