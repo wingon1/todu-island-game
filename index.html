@@ -269,14 +269,14 @@
       }
 
       .button-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr);
         gap: 8px;
         margin-top: 0;
         position: relative;
         z-index: 1;
         min-height: 62px;
         align-items: stretch;
-        justify-content: center;
       }
 
       button.game-btn {
@@ -320,7 +320,9 @@
 
       #stock-btn {
         background: #5fbf93;
-        flex: 1;
+        grid-column: 3;
+        justify-self: end;
+        width: min(100%, 96px);
       }
       #stock-btn:disabled {
         background: #c9bcab;
@@ -329,7 +331,8 @@
       }
 
       button.shop-btn {
-        flex: 0 0 92px;
+        grid-column: 2;
+        width: 92px;
         position: relative;
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid rgba(91, 70, 54, 0.12);
@@ -850,11 +853,11 @@
         </div>
 
         <div class="button-row">
-          <button class="game-btn" id="stock-btn">진열하기</button>
           <button class="game-btn shop-btn" id="shop-btn" aria-label="상점 열기">
             <span class="shop-icon"></span>
             <span class="shop-label">상점</span>
           </button>
+          <button class="game-btn" id="stock-btn">진열하기</button>
           <button class="game-btn" id="upgrade-btn" style="display:none">
             UPGRADE STORE
             <span class="cost" id="upgrade-cost">50 coins</span>

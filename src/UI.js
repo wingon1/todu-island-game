@@ -410,12 +410,11 @@ export class UI {
     }
     this._updateShopBadge();
 
-    // Stock button: show only when inventory has sellable items & a free slot.
+    // Stock button: stay fixed in the layout; only the enabled state changes.
     const hasStockable =
       gameState.hasEmptyShelfSlot() &&
       gameState.availableItems.some((t) => gameState.inventory[t] > 0);
     this.stockBtn.disabled = !hasStockable;
-    this.stockBtn.style.display = hasStockable ? '' : 'none';
 
     // Alba hire buttons: show level + next cost / MAX, highlight when affordable.
     for (const type of ALBA_TYPES) {
