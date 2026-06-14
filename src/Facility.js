@@ -66,22 +66,111 @@ export class FacilityManager {
     g.add(tail);
   }
 
+  // Round arms (a symmetric pair) and feet, matching the cute critter style.
+  _squirrelArms(g, mat, ex, y, z) {
+    for (const sx of [-ex, ex]) {
+      const arm = new THREE.Mesh(new THREE.SphereGeometry(0.082, 8, 6), mat);
+      arm.scale.set(0.7, 1.2, 0.8);
+      arm.position.set(sx, y, z);
+      arm.castShadow = true;
+      g.add(arm);
+    }
+  }
+  _squirrelFeet(g, mat) {
+    for (const ex of [-0.12, 0.12]) {
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.088, 8, 6), mat);
+      foot.scale.set(1.05, 0.58, 1.3);
+      foot.position.set(ex, 0.05, 0.12);
+      foot.castShadow = true;
+      g.add(foot);
+    }
+  }
+
   _makeAxeSquirrel() {
     const c = this._critter(0xc8773c, 0xf0d6b0);
     this._squirrelEarsTail(c.group, c.bodyMat);
     this._denimOveralls(c.group);
-    // Axe in front, on a swinging pivot.
-    const arm = new THREE.Group();
-    arm.position.set(0.2, 0.5, 0.18);
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), toonMat(0x8b5e3c, { flatShading: true }));
-    handle.position.set(0, -0.18, 0);
-    arm.add(handle);
-    const headAxe = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.06), toonMat(0xc9ccd0, { flatShading: true }));
-    headAxe.position.set(0.06, -0.4, 0);
-    arm.add(headAxe);
-    c.group.add(arm);
+    this._squirrelFeet(c.group, c.bodyMat);
+    // Arms reach forward to grip the lower handle.
+    this._squirrelArms(c.group, c.bodyMat, 0.15, 0.46, 0.34);
+
+    // Axe RAISED in front: handle points up out of the hands, the head with its
+    // sharp blade sits at the TOP, cutting edge facing forward. The swing pivot
+    // brings it down and forward to chop.
+    const axeArm = new THREE.Group();
+    axeArm.position.set(0, 0.5, 0.42); // hands, clear of the belly
+    c.group.add(axeArm);
+    c.swing = axeArm;
+
+    const axe = new THREE.Group();
+    axe.rotation.x = 0.15; // lean the raised axe slightly forward
+    axeArm.add(axe);
+    const steel = toonMat(0xc9ccd0, { flatShading: true });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.6, 6), toonMat(0x8b5e3c, { flatShading: true }));
+    handle.position.set(0, 0.26, 0); // extends UP from the hands
+    handle.castShadow = true;
+    axe.add(handle);
+    // Eye block where the head meets the top of the handle.
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, 0.09), steel);
+    eye.position.set(0, 0.56, 0.0);
+    axe.add(eye);
+    // Blade: a flat bit that flares to a curved cutting edge facing FORWARD,
+    // mounted at the top of the handle.
+    const bShape = new THREE.Shape();
+    bShape.moveTo(0, -0.07);
+    bShape.lineTo(0, 0.07);
+    bShape.lineTo(0.2, 0.16);
+    bShape.quadraticCurveTo(0.26, 0, 0.2, -0.16);
+    bShape.lineTo(0, -0.07);
+    const bGeo = new THREE.ExtrudeGeometry(bShape, { depth: 0.05, bevelEnabled: false });
+    bGeo.translate(0, 0, -0.025);
+    bGeo.rotateY(-Math.PI / 2); // depth -> +z (forward), thin along x
+    const blade = new THREE.Mesh(bGeo, steel);
+    blade.position.set(0, 0.56, 0.04);
+    blade.castShadow = true;
+    axe.add(blade);
+
+    // Logs strewn messily across the ground in front of the squirrel.
+    const logMat = toonMat(0x9c6b3f, { flatShading: true });
+    const ringMat = toonMat(0xcaa46a, { flatShading: true });
+    const makeLog = (len, r) => {
+      const lg = new THREE.Group();
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 9), logMat);
+      barrel.rotation.z = Math.PI / 2; // lie along x
+      barrel.castShadow = true;
+      lg.add(barrel);
+      for (const ex of [-len / 2, len / 2]) {
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.02, r * 1.02, 0.02, 9), ringMat);
+        cap.rotation.z = Math.PI / 2;
+        cap.position.x = ex;
+        lg.add(cap);
+      }
+      return lg;
+    };
+    // Upright chopping stump roughly under the axe.
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.3, 10), logMat);
+    stump.position.set(0.05, 0.15, 0.6);
+    stump.castShadow = true;
+    c.group.add(stump);
+    const stumpTop = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.02, 10), ringMat);
+    stumpTop.position.set(0.05, 0.31, 0.6);
+    c.group.add(stumpTop);
+    // Scattered logs, spread out and turned at varied angles (messy woodpile).
+    const logSpots = [
+      [-0.75, 0.08, 0.35, 0.55, 0.5, 0.08],
+      [0.78, 0.075, 0.5, -0.7, 0.46, 0.075],
+      [-0.35, 0.07, 1.05, 1.25, 0.42, 0.07],
+      [0.55, 0.08, 1.0, -1.4, 0.4, 0.072],
+      [0.95, 0.07, 0.15, 0.25, 0.36, 0.065],
+    ];
+    for (const [x, y, z, ry, len, r] of logSpots) {
+      const log = makeLog(len, r);
+      log.position.set(x, y, z);
+      log.rotation.y = ry;
+      c.group.add(log);
+    }
+
     c.group.scale.setScalar(1.2);
-    c.swing = arm;
     return c;
   }
 
@@ -89,6 +178,8 @@ export class FacilityManager {
     const c = this._critter(0xe0a368, 0xf6e6c8); // lighter squirrel
     this._squirrelEarsTail(c.group, c.bodyMat);
     this._denimOveralls(c.group);
+    this._squirrelFeet(c.group, c.bodyMat);
+    this._squirrelArms(c.group, c.bodyMat, 0.27, 0.42, 0.14);
     // A little cart pulled behind.
     const cart = new THREE.Group();
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.32, 0.5), toonMat(0xb5793c, { flatShading: true }));
@@ -100,11 +191,17 @@ export class FacilityManager {
       ban.position.set(-0.15 + (i % 2) * 0.3, 0.5, -0.12 + Math.floor(i / 2) * 0.2);
       cart.add(ban);
     }
-    for (const sx of [-0.32, 0.32]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10), toonMat(0x3a3330, { flatShading: true }));
-      wheel.rotation.x = Math.PI / 2;
+    for (const sx of [-0.34, 0.34]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.07, 12), toonMat(0x3a3330, { flatShading: true }));
+      // Axle along x so the wheels stand upright on the cart's sides.
+      wheel.rotation.z = Math.PI / 2;
       wheel.position.set(sx, 0.16, 0);
       cart.add(wheel);
+      // Light hub so the wheel reads clearly.
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 8), toonMat(0xc9a26a, { flatShading: true }));
+      hub.rotation.z = Math.PI / 2;
+      hub.position.set(sx, 0.16, 0);
+      cart.add(hub);
     }
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), toonMat(0x8b5e3c, { flatShading: true }));
     shaft.rotation.x = Math.PI / 2;
@@ -347,8 +444,8 @@ export class FacilityManager {
 
   _animate(id, w, dt, elapsed) {
     if (id === 'acornFarm' && w.swing) {
-      // chop: swing the axe arm down and up
-      w.swing.rotation.x = -0.4 + Math.abs(Math.sin(elapsed * 4)) * 1.2;
+      // chop: from raised (head up high) swing down & forward onto the stump.
+      w.swing.rotation.x = Math.abs(Math.sin(elapsed * 3.2)) * 0.95;
     } else if (id === 'bananaFarm') {
       // amble back and forth along x
       const dx = Math.sin(elapsed * 0.8) * 1.6;

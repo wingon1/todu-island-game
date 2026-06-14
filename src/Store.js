@@ -310,16 +310,16 @@ export class Store {
       s.add(puff);
     }
 
-    // Hanging shop sign on the front beam.
+    // Shop sign mounted up under the roof's front edge (tucked inward, raised).
     const beam = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 0.08), toonMat(COLORS.woodDark, { flatShading: true }));
-    beam.position.set(0, 1.55, 1.0);
+    beam.position.set(0, 1.89, 0.6);
     s.add(beam);
     const signBoard = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.07), toonMat(0xfff0d6, { flatShading: true }));
-    signBoard.position.set(0, 1.25, 1.0);
+    signBoard.position.set(0, 1.58, 0.52);
     signBoard.castShadow = true;
     s.add(signBoard);
     const signTrim = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.09), toonMat(COLORS.accent || 0xff8c42, { flatShading: true }));
-    signTrim.position.set(0, 1.05, 1.01);
+    signTrim.position.set(0, 1.34, 0.53);
     s.add(signTrim);
 
     // Two little stools out front.
@@ -337,20 +337,6 @@ export class Store {
       stool.position.set(x, 0, 1.5);
       stool.traverse((c) => (c.castShadow = true));
       s.add(stool);
-    }
-
-    // Flower planters on the counter ends.
-    for (const x of [-1.15, 1.15]) {
-      const planter = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.26, 0.4), toonMat(0x7a5230, { flatShading: true }));
-      planter.position.set(x, 0.72, 0.95);
-      s.add(planter);
-      for (let i = 0; i < 2; i++) {
-        const f = makeItem('flower');
-        f.scale.setScalar(0.65);
-        f.position.set(x + (i ? 0.14 : -0.14), 0.84, 0.95);
-        f.traverse((c) => (c.castShadow = true));
-        s.add(f);
-      }
     }
 
     this._shelfTopY = 0.6;
@@ -481,22 +467,14 @@ export class Store {
         const idxInRow = i % perRow;
         const tt = perRow === 1 ? 0.5 : idxInRow / (perRow - 1);
         xPos = -w / 2 + tt * w;
-        // Keep both rows forward (small separation) so the back row also
-        // renders in front of the roof in the isometric view.
-        z = this._shelfZ + (row === 0 ? 0.16 : -0.06);
-        yOff = row === 0 ? 0 : 0.04;
+        // Keep the front row on the counter top (it must not poke past the
+        // front lip) and push the back row inward, with enough separation that
+        // the baskets/crates never overlap one another.
+        z = this._shelfZ + (row === 0 ? 0.0 : -0.4);
+        yOff = 0;
       }
       const pos = new THREE.Vector3(xPos, this._shelfTopY + 0.05 + yOff, z);
       this.slotPositions.push(pos);
-
-      // Tiny slot marker (positioned locally within the store group).
-      const marker = new THREE.Mesh(
-        new THREE.BoxGeometry(0.22, 0.04, 0.22),
-        toonMat(COLORS.woodDark, { flatShading: true })
-      );
-      marker.position.set(pos.x, this._shelfTopY + 0.02, pos.z);
-      this.group.add(marker);
-      this.shelfSlotMeshes.push(marker);
     }
   }
 
@@ -507,37 +485,71 @@ export class Store {
     return mesh;
   }
 
+  // A small pile of the item (1..3) so a bigger stock looks fuller.
+  _pileItems(g, type, count, topY) {
+    const n = Math.min(3, Math.max(1, count));
+    const offs = [
+      [0, 0],
+      [-0.05, 0.04],
+      [0.05, -0.03],
+    ];
+    for (let i = 0; i < n; i++) {
+      const it = makeItem(type);
+      it.scale.setScalar(0.42);
+      it.position.set(offs[i][0], topY + i * 0.012, offs[i][1]);
+      g.add(it);
+    }
+  }
+
   _makeBasketMesh(type, count) {
+    const mode = gameState.shelfDisplayMode ? gameState.shelfDisplayMode() : 'basket';
     const g = new THREE.Group();
-    const isCrate = gameState.shelfDisplayMode && gameState.shelfDisplayMode() === 'crate';
-    const wood = toonMat(0xc49a6c, { flatShading: true });
-    const dark = toonMat(0x8b5e3c, { flatShading: true });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(isCrate ? 0.46 : 0.36, isCrate ? 0.24 : 0.18, isCrate ? 0.36 : 0.3), wood);
-    base.position.y = isCrate ? 0.12 : 0.09;
-    g.add(base);
-    for (const z of [isCrate ? -0.21 : -0.17, isCrate ? 0.21 : 0.17]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(isCrate ? 0.52 : 0.42, 0.06, 0.035), dark);
-      rail.position.set(0, isCrate ? 0.27 : 0.2, z);
-      g.add(rail);
+
+    if (mode === 'crate') {
+      // Level 2: a tidy wooden CRATE — solid body with proud corner posts and
+      // banding so no faces sit coplanar (avoids z-fighting shimmer).
+      const wood = toonMat(0xcaa06e, { flatShading: true });
+      const dark = toonMat(0x8b5e3c, { flatShading: true });
+      // Solid body.
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.26), wood);
+      body.position.y = 0.12;
+      g.add(body);
+      // Corner posts clearly proud of the body faces.
+      for (const sx of [-0.155, 0.155]) {
+        for (const sz of [-0.135, 0.135]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.04), dark);
+          post.position.set(sx, 0.12, sz);
+          g.add(post);
+        }
+      }
+      // Front & back banding rails, raised off the body surface.
+      for (const sz of [-0.155, 0.155]) {
+        for (const sy of [0.07, 0.17]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.04, 0.02), dark);
+          rail.position.set(0, sy, sz);
+          g.add(rail);
+        }
+      }
+      this._pileItems(g, type, count, 0.25);
+    } else {
+      // Level 1: a cute round woven BASKET (small footprint).
+      const tan = toonMat(0xddab68, { flatShading: true });
+      const tanD = toonMat(0xb9844a, { flatShading: true });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.15, 12), tan);
+      body.position.y = 0.075;
+      g.add(body);
+      for (const ry of [0.035, 0.1]) {
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.025, 12), tanD);
+        ring.position.y = ry;
+        g.add(ring);
+      }
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.024, 6, 16), tanD);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 0.15;
+      g.add(rim);
+      this._pileItems(g, type, count, 0.16);
     }
-    const item = makeItem(type);
-    item.scale.setScalar(isCrate ? 0.78 : 0.72);
-    item.position.set(0, isCrate ? 0.28 : 0.2, 0);
-    g.add(item);
-    const badge = new THREE.Group();
-    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 12), toonMat(0xfff3e0, { flatShading: true }));
-    coin.rotation.x = Math.PI / 2;
-    badge.add(coin);
-    const dots = Math.min(5, count);
-    for (let i = 0; i < dots; i++) {
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.018, 5, 4), toonMat(ITEM_COLORS[type] || 0xffffff, { flatShading: true }));
-      const a = (i / Math.max(1, dots)) * Math.PI * 2;
-      dot.position.set(Math.cos(a) * 0.055, Math.sin(a) * 0.055, 0.026);
-      badge.add(dot);
-    }
-    badge.position.set(isCrate ? 0.25 : 0.19, isCrate ? 0.42 : 0.34, isCrate ? 0.21 : 0.17);
-    badge.rotation.x = -0.4;
-    g.add(badge);
+
     g.userData.count = count;
     g.traverse((c) => (c.castShadow = true));
     return g;
@@ -597,8 +609,12 @@ export class Store {
       const it = this.shelfItems[i];
       const pos = this.slotPositions[i] || this.slotPositions[this.slotPositions.length - 1];
       if (!pos) continue;
-      it.mesh.rotation.y += dt * 0.8;
-      it.mesh.position.y = pos.y + Math.sin(elapsed * 2 + i) * 0.02;
+      // Baskets/crates stay planted; only loose single items gently bob.
+      if (it.basket) {
+        it.mesh.position.y = pos.y + 0.02;
+      } else {
+        it.mesh.position.y = pos.y + Math.sin(elapsed * 2 + i) * 0.02;
+      }
     }
   }
 

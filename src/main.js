@@ -134,8 +134,17 @@ function applyCamera() {
     camTarget.z + camDist
   );
   camera.lookAt(camTarget.x, 0.6, camTarget.z);
+  // Keep the sun (and thus its shadow frustum) centered on whatever the camera
+  // is looking at, so shadows are correct on every island as you pan around.
+  // (_sunReady is a hoisted var, set true once the sun is constructed below.)
+  if (_sunReady) {
+    sun.position.set(camTarget.x + SUN_OFFSET.x, SUN_OFFSET.y, camTarget.z + SUN_OFFSET.z);
+    sun.target.position.set(camTarget.x, 0, camTarget.z);
+    sun.target.updateMatrixWorld();
+  }
   setProjection();
 }
+var _sunReady = false;
 
 // Snap the camera straight to a stage's framing (load / replay).
 function setCameraToStage() {
@@ -171,17 +180,24 @@ applyCamera();
 // Lighting — one shadow-casting sun + soft fill.
 // ---------------------------------------------------------------------------
 const sun = new THREE.DirectionalLight(0xfff4dc, 1.5);
-sun.position.set(12, 20, 9);
+// The world is large (main + garden + upper + lower islands) and the camera
+// pans freely, so the sun and its shadow frustum FOLLOW the camera target each
+// frame (see applyCamera). This keeps every island — including the far upper
+// island — inside the shadow camera so their trees cast proper shadows.
+const SUN_OFFSET = new THREE.Vector3(12, 20, 9);
+sun.position.copy(SUN_OFFSET);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -13;
-sun.shadow.camera.right = 13;
-sun.shadow.camera.top = 13;
-sun.shadow.camera.bottom = -13;
+sun.shadow.camera.left = -16;
+sun.shadow.camera.right = 16;
+sun.shadow.camera.top = 16;
+sun.shadow.camera.bottom = -16;
 sun.shadow.camera.near = 0.5;
-sun.shadow.camera.far = 60;
+sun.shadow.camera.far = 70;
 sun.shadow.bias = -0.0008;
 scene.add(sun);
+scene.add(sun.target);
+_sunReady = true;
 scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x9bc77a, 0.7));
 scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 

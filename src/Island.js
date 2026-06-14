@@ -369,6 +369,8 @@ export class Island {
       [6.8, 2.5],
       [-6.8, 2.5],
     ];
+    // Fixed item per spot (matches shoreSpots order): two fish, two shells.
+    this.shoreTypes = ['fish', 'shell', 'fish', 'shell'];
   }
 
   // Register a harvestable node with a "ready" indicator that is an actual
@@ -525,7 +527,7 @@ export class Island {
     if (this.island2) return;
     this._clearCloudCover('island2');
     const g = new THREE.Group();
-    g.position.set(15.0, 0, 0); // closer to the main island
+    g.position.set(16.5, 0, 0); // a bit farther so the islands don't touch
     this.island2 = g;
     this.group.add(g);
     const csz = 0.92;
@@ -565,7 +567,7 @@ export class Island {
     this.group.add(g);
     this.bridgeGroup = g;
     const x0 = 9.0; // main-island edge
-    const x1 = 12.2; // second-island edge
+    const x1 = 11.6; // second-island edge
     const n = 8;
     for (let i = 0; i < n; i++) {
       const x = x0 + (i / (n - 1)) * (x1 - x0);
@@ -868,7 +870,7 @@ export class Island {
     this._clearCloudCover('upperIsland');
     this._clearCloudCover('northWater');
     const g = new THREE.Group();
-    g.position.set(0, 0, -18);
+    g.position.set(0, 0, -15.5); // pulled closer to the main island
     this.upperIsland = g;
     this.group.add(g);
     const csz = 0.85;
@@ -877,7 +879,7 @@ export class Island {
     const gy = 0.64;
 
     // Bridge to the main island (main top edge ~ z -7).
-    this.upperBridge = this._buildZBridge(0, -7.2, -12.0);
+    this.upperBridge = this._buildZBridge(0, -7.2, -9.6);
 
     // Oak trees in the centre, palm trees toward the outer (sea) edge.
     for (const [x, z] of [[-2.0, -1.2], [2.0, -1.2], [0, 0.4]]) {
@@ -901,7 +903,7 @@ export class Island {
     if (this.lowerIsland) return;
     this._clearCloudCover('lowerIsland');
     const g = new THREE.Group();
-    g.position.set(0, 0, 16);
+    g.position.set(0, 0, 11.8); // pulled in close so the bridge actually connects
     this.lowerIsland = g;
     this.group.add(g);
     const csz = 0.85;
@@ -910,42 +912,77 @@ export class Island {
     const gy = 0.64;
 
     // Bridge to the main island (main bottom edge ~ z +7).
-    this.lowerBridge = this._buildZBridge(0, 7.2, 12.6);
+    this.lowerBridge = this._buildZBridge(0, 7.0, 9.6); // longer, reaches onto the island
 
-    // Left: fish farm — a very simple inverted-triangle boat silhouette.
+    // Left: fish farm — a proper little rowboat (pointed bow, open hull).
     const boat = new THREE.Group();
-    boat.position.set(-2.25, 0.18, 5.55);
+    boat.position.set(-2.25, 0.16, 5.55);
     boat.rotation.y = 0.12;
     g.add(boat);
+    // Remember base transform so update() can bob it on the water.
+    this.fishBoat = boat;
+    boat.userData.baseY = boat.position.y;
+    boat.userData.baseRotZ = 0;
     const hullMat = toonMat(0xb5793c, { flatShading: true });
     const trimMat = toonMat(0x8b5e3c, { flatShading: true });
 
-    const hullShape = new THREE.Shape();
-    hullShape.moveTo(-1.15, 0.36);
-    hullShape.lineTo(1.15, 0.36);
-    hullShape.lineTo(0.72, -0.18);
-    hullShape.lineTo(-0.72, -0.18);
-    hullShape.lineTo(-1.15, 0.36);
-    const hullGeo = new THREE.ExtrudeGeometry(hullShape, {
-      depth: 0.58,
-      bevelEnabled: false,
-    });
-    hullGeo.center();
-    hullGeo.rotateX(-Math.PI / 2);
-    const hull = new THREE.Mesh(hullGeo, hullMat);
-    hull.position.y = 0.26;
-    hull.castShadow = true;
-    boat.add(hull);
+    // Plan-view boat outline: sharp bow at +x, blunt rounded stern at -x.
+    const makeOuter = () => {
+      const o = new THREE.Shape();
+      o.moveTo(1.3, 0);
+      o.quadraticCurveTo(0.72, 0.52, -0.3, 0.52);
+      o.quadraticCurveTo(-1.02, 0.5, -1.2, 0.26);
+      o.lineTo(-1.2, -0.26);
+      o.quadraticCurveTo(-1.02, -0.5, -0.3, -0.52);
+      o.quadraticCurveTo(0.72, -0.52, 1.3, 0);
+      return o;
+    };
+    const makeInner = () => {
+      const p = new THREE.Path();
+      p.moveTo(1.02, 0);
+      p.quadraticCurveTo(0.54, 0.37, -0.28, 0.38);
+      p.quadraticCurveTo(-0.84, 0.36, -1.0, 0.18);
+      p.lineTo(-1.0, -0.18);
+      p.quadraticCurveTo(-0.84, -0.36, -0.28, -0.38);
+      p.quadraticCurveTo(0.54, -0.37, 1.02, 0);
+      return p;
+    };
 
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.08, 0.62), trimMat);
-    rim.position.y = 0.52;
-    rim.castShadow = true;
-    boat.add(rim);
+    // Solid lower hull (closed bottom).
+    const lowerGeo = new THREE.ExtrudeGeometry(makeOuter(), { depth: 0.2, bevelEnabled: false });
+    lowerGeo.rotateX(-Math.PI / 2);
+    const lowerHull = new THREE.Mesh(lowerGeo, hullMat);
+    lowerHull.position.y = 0.0;
+    lowerHull.castShadow = true;
+    boat.add(lowerHull);
 
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.48), toonMat(0xc49a6c, { flatShading: true }));
-    seat.position.y = 0.62;
-    seat.castShadow = true;
-    boat.add(seat);
+    // Hollow upper walls (so you can see into the boat).
+    const wallOuter = makeOuter();
+    wallOuter.holes.push(makeInner());
+    const wallGeo = new THREE.ExtrudeGeometry(wallOuter, { depth: 0.26, bevelEnabled: false });
+    wallGeo.rotateX(-Math.PI / 2);
+    const walls = new THREE.Mesh(wallGeo, hullMat);
+    walls.position.y = 0.2;
+    walls.castShadow = true;
+    boat.add(walls);
+
+    // Dark gunwale trim band along the top edge.
+    const trimOuter = makeOuter();
+    trimOuter.holes.push(makeInner());
+    const trimGeo = new THREE.ExtrudeGeometry(trimOuter, { depth: 0.07, bevelEnabled: false });
+    trimGeo.rotateX(-Math.PI / 2);
+    const trim = new THREE.Mesh(trimGeo, trimMat);
+    trim.position.y = 0.44;
+    trim.castShadow = true;
+    boat.add(trim);
+
+    // A couple of plank seats (thwarts) across the hull.
+    for (const sx of [0.3, -0.5]) {
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.74), toonMat(0xc49a6c, { flatShading: true }));
+      seat.position.set(sx, 0.42, 0);
+      seat.castShadow = true;
+      boat.add(seat);
+    }
 
     // Worker stands on the lower/front island edge, facing down toward the
     // water so the bear's face stays visible from the isometric camera.
@@ -956,35 +993,112 @@ export class Island {
     g.add(fishBox);
     const crateMat = toonMat(0xc49a6c, { flatShading: true });
     const crateDark = toonMat(0x8b5e3c, { flatShading: true });
-    const crateBase = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.32, 0.52), crateMat);
-    crateBase.position.y = 0.16;
-    crateBase.castShadow = true;
-    fishBox.add(crateBase);
-    for (const z of [-0.29, 0.29]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.09, 0.05), crateDark);
-      rail.position.set(0, 0.36, z);
-      rail.castShadow = true;
-      fishBox.add(rail);
+    // Open-top wooden crate: thin floor + four low plank walls, so the fish
+    // sit visibly inside the box.
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.06, 0.54), crateMat);
+    floor.position.y = 0.06;
+    floor.castShadow = true;
+    fishBox.add(floor);
+    for (const z of [-0.27, 0.27]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.2, 0.05), crateMat);
+      wall.position.set(0, 0.16, z);
+      wall.castShadow = true;
+      fishBox.add(wall);
     }
-    for (const x of [-0.38, 0.38]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.09, 0.52), crateDark);
-      rail.position.set(x, 0.36, 0);
-      rail.castShadow = true;
-      fishBox.add(rail);
+    for (const x of [-0.37, 0.37]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.54), crateMat);
+      wall.position.set(x, 0.16, 0);
+      wall.castShadow = true;
+      fishBox.add(wall);
     }
-    const fishPileMat = toonMat(0x6fc3df, { flatShading: true });
-    const fishPileDark = toonMat(0x4aa0cf, { flatShading: true });
-    for (let i = 0; i < 7; i++) {
-      const lump = new THREE.Mesh(new THREE.SphereGeometry(0.12, 7, 5), i % 2 ? fishPileMat : fishPileDark);
-      lump.scale.set(1.45, 0.42, 0.62);
-      lump.position.set(-0.24 + (i % 4) * 0.16, 0.46 + Math.floor(i / 4) * 0.05, -0.13 + (i % 3) * 0.12);
-      lump.rotation.y = (i % 2 ? -0.5 : 0.45);
-      lump.castShadow = true;
-      fishBox.add(lump);
+    // Corner posts + top rim band for a tidy crate look.
+    for (const cx of [-0.36, 0.36]) {
+      for (const cz of [-0.26, 0.26]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.06), crateDark);
+        post.position.set(cx, 0.15, cz);
+        post.castShadow = true;
+        fishBox.add(post);
+      }
+    }
+    for (const z of [-0.28, 0.28]) {
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.05, 0.04), crateDark);
+      rim.position.set(0, 0.27, z);
+      fishBox.add(rim);
+    }
+    // Actual fish lying inside the crate.
+    const fishPlaces = [
+      [-0.18, 0.12, 0.4],
+      [0.12, -0.12, -0.5],
+      [-0.05, 0.05, 1.1],
+      [0.2, 0.1, 0.1],
+    ];
+    for (let i = 0; i < fishPlaces.length; i++) {
+      const fish = makeItem('fish');
+      fish.scale.setScalar(0.62);
+      fish.position.set(fishPlaces[i][0], 0.16 + (i % 2) * 0.04, fishPlaces[i][1]);
+      fish.rotation.y = fishPlaces[i][2];
+      fish.rotation.z = 0.12;
+      fish.traverse((c) => (c.castShadow = true));
+      fishBox.add(fish);
     }
 
     // Right: clam harvesting — otters float farther out on the water.
     this._addFacilityStation(g, 'clamFarm', 5.85, 0.05, 0.85);
+    this._buildClamDecor(g);
+  }
+
+  // Cozy, otter-friendly props floating around the clam farm: marker buoys,
+  // kelp pads & fronds, a floating clam, and a couple of rocks.
+  _buildClamDecor(g) {
+    const decor = new THREE.Group();
+    g.add(decor);
+    this.clamDecor = decor;
+    this.clamFloats = [];
+
+    const register = (mesh, baseY) => {
+      mesh.position.y = baseY;
+      this.clamFloats.push({ mesh, baseY, phase: Math.random() * Math.PI * 2 });
+    };
+
+    // --- Marker buoys (cork floats with a little flag) ---
+    const makeBuoy = (col) => {
+      const b = new THREE.Group();
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), toonMat(col, { flatShading: true }));
+      ball.scale.y = 0.85;
+      ball.position.y = 0.04;
+      ball.castShadow = true;
+      b.add(ball);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.05, 10), toonMat(0xfff3e0, { flatShading: true }));
+      band.position.y = 0.04;
+      b.add(band);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.34, 6), toonMat(0x8b5e3c, { flatShading: true }));
+      pole.position.y = 0.26;
+      b.add(pole);
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.02), toonMat(0xff5a5f, { flatShading: true }));
+      flag.position.set(0.085, 0.4, 0);
+      b.add(flag);
+      return b;
+    };
+    const buoyData = [
+      [4.5, 1.7, 0xff7a59],
+      [6.9, 1.9, 0xffd166],
+    ];
+    for (const [x, z, col] of buoyData) {
+      const b = makeBuoy(col);
+      b.position.set(x, 0, z);
+      b.rotation.y = Math.random() * Math.PI * 2;
+      decor.add(b);
+      register(b, 0);
+    }
+
+    // --- A floating clam shell for the otters to crack ---
+    const clam = makeItem('shell');
+    clam.scale.setScalar(0.6);
+    clam.position.set(5.1, 0.05, 1.4);
+    clam.rotation.y = 0.6;
+    clam.traverse((c) => (c.castShadow = true));
+    decor.add(clam);
+    register(clam, 0.05);
   }
 
   // Facility hit meshes (tappable) and world positions.
@@ -1083,8 +1197,10 @@ export class Island {
       this.shoreNodes.push(shore);
     }
 
-    // Build a fresh, recognizable mesh for the chosen type (dispose any old).
-    const type = Math.random() < 0.5 ? 'fish' : 'shell';
+    // Fixed type per shore spot (not random): the two right-side spots are
+    // always fish, the two left-side spots are always shells.
+    const idx = this.shoreNodes.indexOf(shore);
+    const type = this.shoreTypes[idx % this.shoreTypes.length];
     if (shore.mesh) disposeObject(shore.mesh);
     const mesh = makeItem(type);
     mesh.scale.setScalar(1.6);
@@ -1093,7 +1209,7 @@ export class Island {
     shore.mesh = mesh;
     shore.type = type;
 
-    const spot = this.shoreSpots[this.shoreNodes.indexOf(shore) % this.shoreSpots.length];
+    const spot = this.shoreSpots[idx % this.shoreSpots.length];
     const y = 0.5; // sit on the sand surface (items are base-aligned)
     mesh.position.set(spot[0], y, spot[1]);
     shore.hit.position.set(spot[0], y + 0.25, spot[1]);
@@ -1117,6 +1233,22 @@ export class Island {
         const t = elapsed * (bee.userData.speed || 0.9) + ph;
         bee.position.set(Math.cos(t) * r, 0.72 + Math.sin(t * 1.7) * 0.12, Math.sin(t) * r * 0.65);
         bee.rotation.y = -t + Math.PI / 2;
+      }
+    }
+
+    // Fishing boat bobbing gently on the water.
+    if (this.fishBoat) {
+      const b = this.fishBoat;
+      b.position.y = (b.userData.baseY || 0) + Math.sin(elapsed * 1.1) * 0.04;
+      b.rotation.z = Math.sin(elapsed * 0.9 + 0.6) * 0.05;
+      b.rotation.x = Math.sin(elapsed * 0.7) * 0.03;
+    }
+
+    // Clam-farm decor (buoys, kelp, clam) bobbing on the water.
+    if (this.clamFloats) {
+      for (const f of this.clamFloats) {
+        f.mesh.position.y = f.baseY + Math.sin(elapsed * 1.3 + f.phase) * 0.03;
+        f.mesh.rotation.z = Math.sin(elapsed * 0.8 + f.phase) * 0.06;
       }
     }
 
@@ -1209,6 +1341,9 @@ export class Island {
     }
     this.facilityStations = {};
     this.fountain = null;
+    this.fishBoat = null;
+    this.clamDecor = null;
+    this.clamFloats = null;
     this.apiaryBees = [];
     this._enabledFeatures.clear();
     this._buildCloudCovers();
