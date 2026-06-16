@@ -566,6 +566,10 @@ function doStock() {
     store.refreshShelf();
     audio.uiTap();
     scheduleSave();
+    const tip = document.getElementById('tutorial-tip');
+    if (tip && !tip.classList.contains('hidden')) {
+      tip.classList.add('hidden');
+    }
   }
 }
 
