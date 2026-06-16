@@ -70,6 +70,35 @@
         overflow: hidden;
       }
 
+      /* Tutorial tip banner */
+      #tutorial-tip {
+        position: absolute;
+        top: calc(48px + env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 248, 236, 0.93);
+        border: 2px solid var(--accent);
+        border-radius: 14px;
+        padding: 10px 16px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        text-align: center;
+        line-height: 1.55;
+        white-space: nowrap;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+        z-index: 15;
+        pointer-events: none;
+        transition: opacity 0.4s ease;
+      }
+      #tutorial-tip.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #tutorial-tip::before {
+        content: '💡 ';
+      }
+
       /* Top HUD: coins + inventory as item icons over the scene, transparent. */
       #top-hud {
         position: absolute;
@@ -836,6 +865,8 @@
         <canvas id="game-canvas"></canvas>
       </div>
       <div id="label-layer"></div>
+
+      <div id="tutorial-tip">나무에서 도토리를 수확해서 진열하세요.<br>그리고 상점을 업그레이드 하세요.</div>
 
       <div id="top-hud">
         <div class="stage-pill" id="stage-pill">Wooden<br />Stall</div>
