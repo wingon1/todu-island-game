@@ -502,10 +502,6 @@ function startGame() {
     gameState.startTime = performance.now();
   }
   paused = false;
-  if (localStorage.getItem('tutorialTipDismissed') === '1') {
-    const tip = document.getElementById('tutorial-tip');
-    if (tip) tip.classList.add('hidden');
-  }
 }
 
 function doUpgrade() {
