@@ -92,8 +92,7 @@
         transition: opacity 0.5s ease;
       }
       #tutorial-tip.hidden {
-        opacity: 0;
-        pointer-events: none;
+        display: none;
       }
       #tutorial-tip::before {
         content: '💡 ';
@@ -867,6 +866,7 @@
       <div id="label-layer"></div>
 
       <div id="tutorial-tip">나무에서 도토리를 수확해서 진열하세요.<br>그리고 상점을 업그레이드 하세요.</div>
+      <script>if(localStorage.getItem('tutorialTipDismissed')==='1'){document.getElementById('tutorial-tip').classList.add('hidden');}</script>
 
       <div id="top-hud">
         <div class="stage-pill" id="stage-pill">Wooden<br />Stall</div>
